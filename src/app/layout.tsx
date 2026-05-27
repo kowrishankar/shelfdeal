@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +14,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bargain Goods — UK retailer price comparison",
-  description:
-    "Compare product prices across ASDA, Tesco, Sainsbury's, Amazon, Costco, Booker and more. Built for corner shops and convenience retailers.",
-  applicationName: "Bargain Goods",
+  title: {
+    default: `${BRAND_NAME} — UK retailer price comparison`,
+    template: `%s | ${BRAND_NAME}`,
+  },
+  description: BRAND_DESCRIPTION,
+  applicationName: BRAND_NAME,
+  appleWebApp: {
+    title: BRAND_NAME,
+  },
+  openGraph: {
+    title: BRAND_NAME,
+    description: BRAND_TAGLINE,
+    siteName: BRAND_NAME,
+    type: "website",
+    locale: "en_GB",
+  },
 };
 
 export const viewport: Viewport = {

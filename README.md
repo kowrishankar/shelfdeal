@@ -1,4 +1,4 @@
-# Bargain Goods
+# Shelf Deal
 
 Mobile-friendly UK retailer price comparison for independent shops, corner stores, and convenience retailers.
 
@@ -56,6 +56,21 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 ```
 
+6. Optional — **Amazon live prices in production** (recommended on Vercel):
+
+Amazon blocks datacenter HTML scraping, so product pages often show “Price hidden” without the Creators API.
+
+```bash
+# In .env.local / Vercel env — from Associates Central → Tools → Creators API
+AMAZON_CREATORS_CREDENTIAL_ID=...
+AMAZON_CREATORS_CREDENTIAL_SECRET=...
+AMAZON_CREATORS_VERSION=2.2          # EU/UK
+AMAZON_PARTNER_TAG=yourstore-21
+AMAZON_MARKETPLACE=www.amazon.co.uk
+```
+
+Requires an [Amazon Associates](https://affiliate-program.amazon.co.uk) account approved for the Creators API (typically 10 qualifying sales in the last 30 days). Verify after deploy: `/api/debug/amazon-price`.
+
 Open [http://localhost:3000](http://localhost:3000).
 
 ## API
@@ -78,6 +93,7 @@ Price snapshots are stored in `price_snapshots` for history (ready for alerts UI
 
 ## Limitations
 
-- Some retailers block bots (Sainsbury's, sometimes ASDA search)
+- Some retailers block bots (Sainsbury's; Amazon on Vercel without Creators API credentials)
+- ASDA uses Algolia catalogue API (not HTML scrape)
 - Booker requires a trade account at checkout
 - Always confirm prices on the retailer site before ordering

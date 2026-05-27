@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import Link from "next/link";
 
 export const metadata = {
-  title: "Product | Bargain Goods",
+  title: "Product",
 };
 
 export default async function ProductPage({

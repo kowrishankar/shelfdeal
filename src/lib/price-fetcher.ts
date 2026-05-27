@@ -6,7 +6,6 @@ import {
 import {
   fetchJsonLdListing,
   listingFromJsonLd,
-  parseAmazonPrice,
   parseBookerPricing,
   parseTescoClubcardMeta,
   unavailable,
@@ -15,6 +14,7 @@ import {
   fetchAsdaPrice,
   isAsdaGroceriesProductUrl,
 } from "./retailers/asda-algolia";
+import { fetchAmazonPrice, isAmazonProductUrl } from "./retailers/amazon";
 import { fetchHtml } from "./http";
 
 export const ACTIVE_RETAILERS: RetailerId[] = [
@@ -105,50 +105,6 @@ async function fetchBooker(url: string): Promise<RetailerListing> {
   }
 }
 
-async function fetchAmazon(url: string): Promise<RetailerListing> {
-  const fetchedAt = new Date().toISOString();
-  try {
-    const html = await fetchHtml(url, {
-      cookie: "i18n-prefs=GBP; lc-acbuk=en_GB",
-    });
-    const price = parseAmazonPrice(html);
-    const base = listingFromJsonLd("amazon", url, html);
-
-    if (price === undefined && !base) {
-      return unavailable("amazon", url, fetchedAt, "Price hidden — view on Amazon");
-    }
-
-    const prices = base?.prices.length
-      ? base.prices
-      : price !== undefined
-        ? [
-            {
-              kind: "standard" as const,
-              label: "Amazon",
-              amount: price,
-              currency: "GBP" as const,
-            },
-          ]
-        : [];
-
-    return {
-      retailerId: "amazon",
-      retailerName: "Amazon",
-      productName: base?.productName ?? "Product",
-      url,
-      imageUrl: base?.imageUrl,
-      inStock: base?.inStock ?? true,
-      prices,
-      sortPrice: Math.min(...prices.map((p) => p.amount)),
-      fetchedAt,
-      note: "Amazon price may vary by seller",
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Fetch failed";
-    return unavailable("amazon", url, fetchedAt, message);
-  }
-}
-
 function normalizeRetailerId(retailerId: RetailerId | string): RetailerId {
   return String(retailerId).toLowerCase() as RetailerId;
 }
@@ -157,9 +113,11 @@ export async function fetchRetailerPrice(
   retailerId: RetailerId,
   url: string,
 ): Promise<RetailerListing> {
-  // Always use ASDA catalogue API for asda.com product URLs (never scrape HTML).
   if (isAsdaGroceriesProductUrl(url)) {
     return fetchAsdaPrice(url);
+  }
+  if (isAmazonProductUrl(url)) {
+    return fetchAmazonPrice(url);
   }
 
   const id = normalizeRetailerId(retailerId);
@@ -172,7 +130,7 @@ export async function fetchRetailerPrice(
       listing = await fetchBooker(url);
       break;
     case "amazon":
-      listing = await fetchAmazon(url);
+      listing = await fetchAmazonPrice(url);
       break;
     case "asda":
       listing = await fetchAsdaPrice(url);

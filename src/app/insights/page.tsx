@@ -2,7 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { InsightsClient } from "@/components/insights/InsightsClient";
 
 export const metadata = {
-  title: "Insights | Bargain Goods",
+  title: "Insights",
 };
 
 export default function InsightsPage() {

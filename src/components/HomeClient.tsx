@@ -24,7 +24,7 @@ export function HomeClient() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 pt-6">
+    <div className="mx-auto w-full max-w-lg px-4 pt-4">
       <VariantSearchBar
         onSearch={handleSearch}
         onSelectDbProduct={goToSavedProduct}

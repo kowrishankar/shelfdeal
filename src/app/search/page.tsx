@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { SearchResultsClient } from "@/components/search/SearchResultsClient";
 
 export const metadata = {
-  title: "Choose product | Bargain Goods",
+  title: "Choose product",
 };
 
 export default async function SearchPage({

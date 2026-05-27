@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ShelfDealMark, ShelfDealWordmark } from "@/components/brand/ShelfDealLogo";
+import { BRAND_TAGLINE } from "@/lib/brand";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AppShellProps {
@@ -28,8 +30,8 @@ function NavIcon({ active, children }: { active?: boolean; children: React.React
 export function AppShell({
   children,
   minimal = false,
-  title = "Stock up for less",
-  subtitle = "Prices, margins & AI insights for UK shop owners",
+  title = "Smarter shelf pricing",
+  subtitle = BRAND_TAGLINE,
 }: AppShellProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -47,28 +49,31 @@ export function AppShell({
         <div className="mx-auto flex max-w-lg items-center gap-3">
           <Link
             href="/"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border)]"
-            aria-label="Home"
+            className="shrink-0 rounded-2xl ring-1 ring-[var(--border)] transition hover:ring-[var(--accent)]/40"
+            aria-label="Shelf Deal home"
           >
-            <svg
-              className="h-5 w-5 text-[var(--text-secondary)]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.75}
-            >
-              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <ShelfDealMark size="md" />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="section-label text-[var(--accent)]">Bargain Goods</p>
-            {!minimal && (
+            {minimal || isHome ? (
+              <Link href="/" className="inline-block">
+                <ShelfDealWordmark size={minimal ? "md" : "sm"} />
+              </Link>
+            ) : (
               <>
+                <Link href="/" className="inline-block">
+                  <ShelfDealWordmark size="sm" />
+                </Link>
                 <h1 className="truncate text-lg font-bold text-[var(--text-primary)]">
                   {title}
                 </h1>
                 <p className="truncate text-xs text-[var(--text-secondary)]">{subtitle}</p>
               </>
+            )}
+            {isHome && !minimal && (
+              <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">
+                {subtitle}
+              </p>
             )}
           </div>
           {user ? (
