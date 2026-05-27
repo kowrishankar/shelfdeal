@@ -27,8 +27,19 @@ export interface AsdaAlgoliaProduct {
 }
 
 export function extractCinFromAsdaUrl(url: string): string | null {
-  const match = url.match(/\/(\d{5,12})(?:\?|$)/);
+  const match = url.match(/\/(\d{5,12})(?:\?|#|$)/);
   return match?.[1] ?? null;
+}
+
+/** True for grocery PDP URLs that include a CIN (catalogue id). */
+export function isAsdaGroceriesProductUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (!host.includes("asda.com")) return false;
+    return /\/groceries\/product\//i.test(url) && extractCinFromAsdaUrl(url) != null;
+  } catch {
+    return false;
+  }
 }
 
 export function asdaProductUrl(cin: string, name: string): string {
@@ -53,7 +64,7 @@ export async function fetchAsdaProductByCin(
       "X-Algolia-Application-Id": ASDA_ALGOLIA.appId,
       "X-Algolia-API-Key": ASDA_ALGOLIA.searchKey,
     },
-    next: { revalidate: 0 },
+    cache: "no-store",
   });
 
   if (response.status === 404) return null;

@@ -11,7 +11,10 @@ import {
   parseTescoClubcardMeta,
   unavailable,
 } from "./retailers/shared";
-import { fetchAsdaPrice } from "./retailers/asda-algolia";
+import {
+  fetchAsdaPrice,
+  isAsdaGroceriesProductUrl,
+} from "./retailers/asda-algolia";
 import { fetchHtml } from "./http";
 
 export const ACTIVE_RETAILERS: RetailerId[] = [
@@ -146,12 +149,22 @@ async function fetchAmazon(url: string): Promise<RetailerListing> {
   }
 }
 
+function normalizeRetailerId(retailerId: RetailerId | string): RetailerId {
+  return String(retailerId).toLowerCase() as RetailerId;
+}
+
 export async function fetchRetailerPrice(
   retailerId: RetailerId,
   url: string,
 ): Promise<RetailerListing> {
+  // Always use ASDA catalogue API for asda.com product URLs (never scrape HTML).
+  if (isAsdaGroceriesProductUrl(url)) {
+    return fetchAsdaPrice(url);
+  }
+
+  const id = normalizeRetailerId(retailerId);
   let listing: RetailerListing;
-  switch (retailerId) {
+  switch (id) {
     case "tesco":
       listing = await fetchTesco(url);
       break;
@@ -165,10 +178,10 @@ export async function fetchRetailerPrice(
       listing = await fetchAsdaPrice(url);
       break;
     default:
-      listing = await fetchJsonLdListing(retailerId, url);
+      listing = await fetchJsonLdListing(id, url);
   }
 
-  if (listing.prices.length > 0 && retailerId !== "booker") {
+  if (listing.prices.length > 0 && id !== "booker") {
     return applyMultipackUnitPricing(listing);
   }
   return listing;

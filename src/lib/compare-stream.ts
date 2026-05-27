@@ -15,6 +15,7 @@ import {
   type DbProduct,
 } from "./db/products";
 import { fetchRetailerPrice } from "./price-fetcher";
+import { isAsdaGroceriesProductUrl } from "./retailers/asda-algolia";
 import { RETAILER_NAMES } from "./retailers/shared";
 import type { RetailerId, RetailerListing } from "./types";
 
@@ -215,9 +216,10 @@ export async function* streamPriceComparison(
     phase: "prices",
   };
 
-  const toFetch = dbListings.filter(
-    (row) => !pricedByRetailer.has(row.retailerId),
-  );
+  const toFetch = dbListings.filter((row) => {
+    const retailerKey = isAsdaGroceriesProductUrl(row.url) ? "asda" : row.retailerId;
+    return !pricedByRetailer.has(retailerKey);
+  });
 
   const queue = createEventQueue();
   let earlyDoneSent = pricedByRetailer.size >= 2;
@@ -241,7 +243,10 @@ export async function* streamPriceComparison(
     await Promise.all(
       toFetch.map(async (row) => {
         try {
-          const live = await fetchRetailerPrice(row.retailerId, row.url);
+          const live = await fetchRetailerPrice(
+            isAsdaGroceriesProductUrl(row.url) ? "asda" : row.retailerId,
+            row.url,
+          );
           const listing = enrichListing(
             live,
             row.retailerProductName ?? product!.canonicalName,

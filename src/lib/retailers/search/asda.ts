@@ -63,7 +63,7 @@ async function searchAsdaAlgolia(
     body: JSON.stringify({
       params: `query=${encodeURIComponent(query)}&hitsPerPage=8`,
     }),
-    next: { revalidate: 0 },
+    cache: "no-store",
   });
 
   if (!response.ok) {
