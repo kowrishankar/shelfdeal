@@ -27,10 +27,11 @@ Mobile-friendly UK retailer price comparison for independent shops, corner store
 cp .env.example .env.local
 ```
 
-2. Apply schema (already applied if using the project created via Neon MCP):
+2. Apply schema in the [Neon SQL editor](https://console.neon.tech):
 
 ```bash
-# Run SQL in db/schema.sql against your Neon database
+# New database: run all of db/schema.sql, then db/schema-auth.sql
+# Existing database: also run db/migrate-production.sql (adds category + pgvector)
 ```
 
 3. Install and run:

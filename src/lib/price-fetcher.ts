@@ -11,6 +11,7 @@ import {
   parseTescoClubcardMeta,
   unavailable,
 } from "./retailers/shared";
+import { fetchAsdaPrice } from "./retailers/asda-algolia";
 import { fetchHtml } from "./http";
 
 export const ACTIVE_RETAILERS: RetailerId[] = [
@@ -159,6 +160,9 @@ export async function fetchRetailerPrice(
       break;
     case "amazon":
       listing = await fetchAmazon(url);
+      break;
+    case "asda":
+      listing = await fetchAsdaPrice(url);
       break;
     default:
       listing = await fetchJsonLdListing(retailerId, url);

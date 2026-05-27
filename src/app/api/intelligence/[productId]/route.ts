@@ -31,6 +31,14 @@ export async function GET(
     return NextResponse.json(card);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Intelligence failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const hint =
+      /column.*category|does not exist|vector/i.test(message)
+        ? "Run db/migrate-production.sql in your Neon SQL editor, then redeploy."
+        : undefined;
+    console.error("[intelligence]", productId, err);
+    return NextResponse.json(
+      { error: message, hint },
+      { status: 500 },
+    );
   }
 }

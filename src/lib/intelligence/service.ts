@@ -35,10 +35,14 @@ export async function getOrComputeIntelligence(
   scored = await enrichWithAiSummary(product.canonicalName, scored);
 
   await saveIntelligence(productId, scored);
-  void upsertProductEmbedding(
-    productId,
-    `${product.canonicalName}. Category: ${signals.category}. ${scored.summary}`,
-  );
+  try {
+    await upsertProductEmbedding(
+      productId,
+      `${product.canonicalName}. Category: ${signals.category}. ${scored.summary}`,
+    );
+  } catch {
+    /* requires pgvector + OPENAI_API_KEY */
+  }
 
   return {
     productId,

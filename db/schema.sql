@@ -1,5 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -7,6 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
   canonical_name TEXT NOT NULL,
   barcode TEXT,
   image_url TEXT,
+  category TEXT,
   source_query TEXT NOT NULL,
   search_count INT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

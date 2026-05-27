@@ -67,7 +67,7 @@ export async function collectMarketSignals(
 
   const [productRow, listings, searchStats, priceHistory] = await Promise.all([
     sql`
-      SELECT search_count, category FROM products WHERE id = ${productId}::uuid
+      SELECT search_count FROM products WHERE id = ${productId}::uuid
     `,
     getListingsForProduct(productId),
     sql`
@@ -135,10 +135,15 @@ export async function collectMarketSignals(
     demand_momentum: demandMomentum,
   });
 
-  if (!productRow[0]?.category) {
+  try {
     await sql`
-      UPDATE products SET category = ${category.label} WHERE id = ${productId}::uuid
+      UPDATE products
+      SET category = ${category.label}, updated_at = now()
+      WHERE id = ${productId}::uuid
+        AND (category IS NULL OR category = '')
     `;
+  } catch {
+    /* category column may be missing until db/migrate-production.sql is applied */
   }
 
   return {

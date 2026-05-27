@@ -1,19 +1,13 @@
 import { fetchHtml } from "../../http";
 import { extractPackInfo } from "../../product-matching";
+import {
+  ASDA_ALGOLIA,
+  asdaImageUrl,
+  asdaProductUrl,
+  fetchAsdaProductByCin,
+  type AsdaAlgoliaProduct,
+} from "../asda-algolia";
 import type { RetailerSearchHit } from "./types";
-
-/** Public client-side Algolia credentials embedded in ASDA's grocery SPA */
-const DEFAULT_ALGOLIA = {
-  appId: "8I6WSKCCNV",
-  searchKey: "03e4272048dd17f771da37b57ff8a75e",
-  index: "ASDA_PRODUCTS",
-};
-
-interface AsdaAlgoliaHit {
-  CIN?: string;
-  NAME?: string;
-  IMAGE_ID?: string;
-}
 
 interface AlgoliaConfig {
   appId: string;
@@ -33,35 +27,33 @@ function parseAlgoliaConfig(html: string): AlgoliaConfig | null {
 
 async function resolveAlgoliaConfig(): Promise<AlgoliaConfig> {
   try {
-    const html = await fetchHtml("https://www.asda.com/groceries/search");
-    return parseAlgoliaConfig(html) ?? DEFAULT_ALGOLIA;
+    const html = await fetchHtml("https://www.asda.com/groceries/search", {
+      referer: "https://www.asda.com/",
+    });
+    return parseAlgoliaConfig(html) ?? ASDA_ALGOLIA;
   } catch {
-    return DEFAULT_ALGOLIA;
+    return ASDA_ALGOLIA;
   }
 }
 
-function slugFromName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function productUrl(cin: string, name: string): string {
-  return `https://www.asda.com/groceries/product/${slugFromName(name)}/${cin}`;
-}
-
-function imageUrlFromHit(hit: AsdaAlgoliaHit): string | undefined {
-  if (!hit.IMAGE_ID) return undefined;
-  return `https://asda.scene7.com/is/image/asdagroceries/${hit.IMAGE_ID}?fmt=webp`;
+function hitFromAlgoliaItem(item: AsdaAlgoliaProduct): RetailerSearchHit | null {
+  if (!item.CIN || !item.NAME) return null;
+  const name = item.NAME.trim();
+  return {
+    retailerId: "asda",
+    url: asdaProductUrl(item.CIN, name),
+    name,
+    packLabel: extractPackInfo(`${name} ${item.PACK_SIZE ?? ""}`).packLabel,
+    imageUrl: asdaImageUrl(item.IMAGE_ID),
+  };
 }
 
 async function searchAsdaAlgolia(
   query: string,
   config: AlgoliaConfig,
 ): Promise<RetailerSearchHit[]> {
-  const url = `https://${config.appId}-dsn.algolia.net/1/indexes/${config.index}/query`;
-  const response = await fetch(url, {
+  const endpoint = `https://${config.appId}-dsn.algolia.net/1/indexes/${config.index}/query`;
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "X-Algolia-Application-Id": config.appId,
@@ -78,19 +70,12 @@ async function searchAsdaAlgolia(
     throw new Error(`ASDA Algolia HTTP ${response.status}`);
   }
 
-  const data = (await response.json()) as { hits?: AsdaAlgoliaHit[] };
+  const data = (await response.json()) as { hits?: AsdaAlgoliaProduct[] };
   const hits: RetailerSearchHit[] = [];
 
   for (const item of data.hits ?? []) {
-    if (!item.CIN || !item.NAME) continue;
-    const name = item.NAME.trim();
-    hits.push({
-      retailerId: "asda",
-      url: productUrl(item.CIN, name),
-      name,
-      packLabel: extractPackInfo(name).packLabel,
-      imageUrl: imageUrlFromHit(item),
-    });
+    const hit = hitFromAlgoliaItem(item);
+    if (hit) hits.push(hit);
   }
 
   return hits;
@@ -106,26 +91,32 @@ export async function searchAsda(query: string): Promise<RetailerSearchHit[]> {
   }
 
   const searchUrl = `https://www.asda.com/groceries/search/${encodeURIComponent(query)}`;
-  const html = await fetchHtml(searchUrl);
-  const fallbackHits: RetailerSearchHit[] = [];
+  try {
+    const html = await fetchHtml(searchUrl, { referer: "https://www.asda.com/" });
+    const fallbackHits: RetailerSearchHit[] = [];
 
-  for (const m of html.matchAll(
-    /\/groceries\/product\/([a-z0-9-]+)\/(\d+)/gi,
-  )) {
-    const [, pathSlug, id] = m;
-    fallbackHits.push({
-      retailerId: "asda",
-      url: `https://www.asda.com/groceries/product/${pathSlug}/${id}`,
-      name: query,
-    });
+    for (const m of html.matchAll(
+      /\/groceries\/product\/([a-z0-9-]+)\/(\d+)/gi,
+    )) {
+      const [, pathSlug, id] = m;
+      fallbackHits.push({
+        retailerId: "asda",
+        url: `https://www.asda.com/groceries/product/${pathSlug}/${id}`,
+        name: query,
+      });
+    }
+
+    const seen = new Set<string>();
+    return fallbackHits
+      .filter((h) => {
+        if (seen.has(h.url) || h.url.includes("/search/")) return false;
+        seen.add(h.url);
+        return true;
+      })
+      .slice(0, 8);
+  } catch {
+    return [];
   }
-
-  const seen = new Set<string>();
-  return fallbackHits
-    .filter((h) => {
-      if (seen.has(h.url) || h.url.includes("/search/")) return false;
-      seen.add(h.url);
-      return true;
-    })
-    .slice(0, 8);
 }
+
+export { fetchAsdaProductByCin };
