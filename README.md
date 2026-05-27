@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bargain Goods
 
-## Getting Started
+Mobile-friendly UK retailer price comparison for independent shops, corner stores, and convenience retailers.
 
-First, run the development server:
+## Features
+
+### Price comparison
+- **Search any product** — discovers listings across Tesco, ASDA, Booker, Amazon, Costco, and Sainsbury's
+- **Progressive results** — prices appear via Server-Sent Events as each retailer responds; first summary shows once **2+ prices** are in
+- **Neon Postgres** — products, retailer URLs, and price history saved for faster repeat searches
+- **Tesco Clubcard** — regular vs Clubcard price
+- **Booker wholesale** — trade ex-VAT and inc-VAT
+- **Barcode search** — enter 8–14 digit EAN (e.g. `5000299212936`)
+
+### AI Product Intelligence (`/intelligence`)
+- **Opportunity score** (0–100) — weighted popularity, margin, risk, sell speed, trend
+- **Deterministic scoring** from real signals: search volume, price history, retailer coverage, Booker wholesale vs retail margin, category heuristics
+- **OpenAI summaries** (optional) — structured JSON narrative when `OPENAI_API_KEY` is set; template fallback otherwise
+- **pgvector** — similar product recommendations
+- Dashboard: trending, low-risk, high-margin sections · filters & sorting
+
+## Setup
+
+1. Copy environment file and add your [Neon](https://neon.tech) connection string:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Apply schema (already applied if using the project created via Neon MCP):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Run SQL in db/schema.sql against your Neon database
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Install and run:
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+4. Optional — seed the Chivas example and compute intelligence:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run db:seed
+npm run db:intelligence
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Optional — enable AI-written summaries:
 
-## Deploy on Vercel
+```bash
+# In .env.local
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open [http://localhost:3000](http://localhost:3000).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/search?q=` | DB lookup + suggest new discovery |
+| `GET /api/compare/stream?q=&productId=` | SSE stream of prices (`listing`, `done` events) |
+| `GET /api/intelligence` | Intelligence dashboard (filters: `q`, `sort`, `section`) |
+| `GET /api/intelligence/[id]?detailed=1` | Full product intel + similar products + buying advice |
+
+## Architecture
+
+```
+Search → DB cache hit? → stream cached prices → refresh live in parallel
+       → miss? → discover on 6 retailers → save product + URLs → stream live prices
+```
+
+Price snapshots are stored in `price_snapshots` for history (ready for alerts UI).
+
+## Limitations
+
+- Some retailers block bots (Sainsbury's, sometimes ASDA search)
+- Booker requires a trade account at checkout
+- Always confirm prices on the retailer site before ordering
