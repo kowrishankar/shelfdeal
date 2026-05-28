@@ -16,6 +16,7 @@ import {
   isAsdaGroceriesProductUrl,
 } from "./retailers/asda-algolia";
 import { fetchAmazonPrice, isAmazonProductUrl } from "./retailers/amazon";
+import { fetchCostcoPrice, isCostcoProductUrl } from "./retailers/costco";
 import {
   fetchMorrisonsPrice,
   isMorrisonsProductUrl,
@@ -175,6 +176,9 @@ export async function fetchRetailerPrice(
   if (isMorrisonsProductUrl(url)) {
     return fetchMorrisonsPrice(url);
   }
+  if (isCostcoProductUrl(url)) {
+    return fetchCostcoPrice(url);
+  }
 
   const id = normalizeRetailerId(retailerId);
   let listing: RetailerListing;
@@ -193,6 +197,9 @@ export async function fetchRetailerPrice(
       break;
     case "morrisons":
       listing = await fetchMorrisonsPrice(url);
+      break;
+    case "costco":
+      listing = await fetchCostcoPrice(url);
       break;
     default:
       listing = await fetchJsonLdListing(id, url);
