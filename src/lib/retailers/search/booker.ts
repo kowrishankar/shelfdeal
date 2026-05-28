@@ -23,8 +23,9 @@ function parseBookerServings(servings: string): string | null {
 export async function searchBooker(query: string): Promise<RetailerSearchHit[]> {
   const url = `https://www.booker.co.uk/products/product-search?keywords=${encodeURIComponent(query)}`;
   const html = await fetchHtml(url, {
-    warmOrigin: "https://www.booker.co.uk",
+    warmUrl: "https://www.booker.co.uk/",
     referer: "https://www.booker.co.uk/",
+    scraperProxy: Boolean(process.env.SCRAPER_API_KEY),
   });
   const hits: RetailerSearchHit[] = [];
 

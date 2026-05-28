@@ -6,6 +6,13 @@ export interface FetchHtmlOptions {
   referer?: string;
   /** Visit site root first to collect session cookies (helps Tesco/Booker on serverless). */
   warmOrigin?: string;
+  /** Visit a specific URL for cookie warming (preferred over warmOrigin alone). */
+  warmUrl?: string;
+  /**
+   * Route via ScraperAPI when SCRAPER_API_KEY is set (Booker/Tesco HTML on Vercel).
+   * Ignored if the env var is missing.
+   */
+  scraperProxy?: boolean;
 }
 
 function mergeCookies(...parts: (string | undefined)[]): string | undefined {
@@ -23,9 +30,28 @@ function mergeCookies(...parts: (string | undefined)[]): string | undefined {
   return [...byName.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-async function warmOriginCookies(origin: string): Promise<string | undefined> {
+function readSetCookies(response: Response): string[] {
+  if (typeof response.headers.getSetCookie === "function") {
+    return response.headers.getSetCookie();
+  }
+  const raw = response.headers.get("set-cookie");
+  return raw ? [raw] : [];
+}
+
+function scraperProxyUrl(targetUrl: string): string | null {
+  const key = process.env.SCRAPER_API_KEY?.trim();
+  if (!key) return null;
+  const params = new URLSearchParams({
+    api_key: key,
+    url: targetUrl,
+    country_code: "gb",
+  });
+  return `https://api.scraperapi.com?${params}`;
+}
+
+async function warmSessionCookies(warmTarget: string): Promise<string | undefined> {
   try {
-    const response = await fetch(`${origin}/`, {
+    const response = await fetch(warmTarget, {
       headers: {
         "User-Agent": BROWSER_UA,
         Accept:
@@ -36,10 +62,7 @@ async function warmOriginCookies(origin: string): Promise<string | undefined> {
       cache: "no-store",
     });
     return mergeCookies(
-      ...(typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : []
-      ).map((c) => c.split(";")[0]),
+      ...readSetCookies(response).map((c) => c.split(";")[0]),
     );
   } catch {
     return undefined;
@@ -51,8 +74,11 @@ export async function fetchHtml(
   options?: FetchHtmlOptions,
 ): Promise<string> {
   let cookie = options?.cookie;
-  if (options?.warmOrigin) {
-    cookie = mergeCookies(cookie, await warmOriginCookies(options.warmOrigin));
+  const warmTarget =
+    options?.warmUrl ??
+    (options?.warmOrigin ? `${options.warmOrigin.replace(/\/$/, "")}/` : undefined);
+  if (warmTarget) {
+    cookie = mergeCookies(cookie, await warmSessionCookies(warmTarget));
   }
 
   const headers: Record<string, string> = {
@@ -73,7 +99,10 @@ export async function fetchHtml(
     headers["Sec-Fetch-Site"] = "same-origin";
   }
 
-  const response = await fetch(url, {
+  const fetchUrl =
+    options?.scraperProxy && scraperProxyUrl(url) ? scraperProxyUrl(url)! : url;
+
+  const response = await fetch(fetchUrl, {
     headers,
     cache: "no-store",
   });
