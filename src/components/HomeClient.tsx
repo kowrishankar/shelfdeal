@@ -62,7 +62,7 @@ export function HomeClient() {
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--positive)]/15 text-[var(--positive-text)]">
                 3
               </span>
-              <span>AI margin, POR & score rating (Excellent → Avoid)</span>
+              <span>See where to buy cheapest — ranked by price</span>
             </li>
           </ul>
         </div>

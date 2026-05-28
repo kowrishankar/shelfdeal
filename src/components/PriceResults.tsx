@@ -4,14 +4,14 @@ import { ProductImage } from "@/components/ProductImage";
 import type { PriceComparisonState, PriceLine, RetailerListing } from "@/lib/types";
 
 const RETAILER_COLORS: Record<string, string> = {
-  asda: "from-green-600/80 to-green-800/80",
-  tesco: "from-blue-600/80 to-blue-900/80",
-  sainsburys: "from-orange-500/80 to-orange-700/80",
-  amazon: "from-amber-500/80 to-amber-700/80",
-  costco: "from-red-600/80 to-red-900/80",
-  booker: "from-sky-600/80 to-sky-900/80",
-  morrisons: "from-yellow-500/80 to-yellow-700/80",
-  ocado: "from-teal-600/80 to-teal-900/80",
+  asda: "bg-emerald-600",
+  tesco: "bg-blue-600",
+  sainsburys: "bg-orange-500",
+  amazon: "bg-amber-500",
+  costco: "bg-red-600",
+  booker: "bg-sky-600",
+  morrisons: "bg-yellow-500",
+  ocado: "bg-teal-600",
 };
 
 function formatPrice(amount: number) {
@@ -21,46 +21,24 @@ function formatPrice(amount: number) {
   }).format(amount);
 }
 
-function priceLineStyle(line: PriceLine, highlight?: boolean): string {
-  if (highlight) {
-    return "bg-[var(--accent)]/15 text-[var(--text-primary)] ring-1 ring-[var(--accent)]/40";
-  }
-  if (line.kind === "clubcard") return "bg-blue-500/10 text-blue-200";
-  if (line.kind === "unit_inc_vat" || line.kind === "unit_ex_vat") {
-    return "bg-[var(--accent)]/10 text-[var(--accent)]";
-  }
-  if (line.kind === "rrp") return "bg-violet-500/10 text-violet-200";
-  if (line.kind === "por") return "bg-[var(--positive-bg)] text-[var(--positive-text)]";
-  return "bg-[var(--bg-elevated)] text-[var(--text-secondary)]";
+function pickPrimaryPrice(listing: RetailerListing): PriceLine | null {
+  return (
+    listing.prices.find((p) => p.kind === "unit_inc_vat") ??
+    listing.prices.find((p) => p.kind === "unit_ex_vat") ??
+    listing.prices.find((p) => p.kind === "clubcard") ??
+    listing.prices.find((p) => p.kind === "inc_vat") ??
+    listing.prices.find((p) => p.kind === "standard") ??
+    listing.prices[0] ??
+    null
+  );
 }
 
-function PriceBadge({ line, highlight }: { line: PriceLine; highlight?: boolean }) {
-  const isClubcard = line.kind === "clubcard";
-  const isPor = line.kind === "por";
-  const showPercent =
-    line.percent != null &&
-    (isPor || line.label.toLowerCase().includes("margin"));
-
-  return (
-    <div
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm ${priceLineStyle(line, highlight)}`}
-    >
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        {isClubcard && (
-          <span className="badge-accent shrink-0">Clubcard</span>
-        )}
-        {(line.kind === "unit_inc_vat" || line.kind === "unit_ex_vat") && (
-          <span className="badge-accent shrink-0">Each</span>
-        )}
-        <span className="truncate">{line.label}</span>
-      </span>
-      <span className="shrink-0 tabular-nums font-semibold">
-        {showPercent
-          ? `${line.percent}%`
-          : formatPrice(line.amount)}
-      </span>
-    </div>
-  );
+function pickSecondaryPrices(listing: RetailerListing, primary: PriceLine | null): PriceLine[] {
+  return listing.prices.filter((line) => {
+    if (line === primary) return false;
+    if (line.kind === "por") return false;
+    return true;
+  });
 }
 
 function RetailerRow({
@@ -72,24 +50,20 @@ function RetailerRow({
   rank: number;
   isCheapest: boolean;
 }) {
-  const gradient = RETAILER_COLORS[listing.retailerId] ?? "from-slate-600/80 to-slate-800/80";
+  const color = RETAILER_COLORS[listing.retailerId] ?? "bg-slate-500";
   const hasError = Boolean(listing.error);
-  const highlightPrice =
-    listing.prices.find((p) => p.kind === "unit_inc_vat") ??
-    listing.prices.find((p) => p.kind === "unit_ex_vat") ??
-    listing.prices.find((p) => p.kind === "clubcard") ??
-    listing.prices.find((p) => p.kind === "inc_vat") ??
-    listing.prices.find((p) => p.kind === "standard");
+  const primary = pickPrimaryPrice(listing);
+  const secondary = pickSecondaryPrices(listing, primary);
 
   return (
     <article
       className={`surface-card p-4 transition ${
-        isCheapest ? "ring-2 ring-[var(--accent)]/50" : ""
+        isCheapest ? "border-[var(--positive)]/30 ring-2 ring-[var(--positive)]/20" : ""
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-sm font-bold text-white shadow-lg`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color} text-sm font-bold text-white`}
           aria-hidden
         >
           {hasError ? "—" : rank}
@@ -104,24 +78,47 @@ function RetailerRow({
             <h3 className="font-semibold text-[var(--text-primary)]">
               {listing.retailerName}
             </h3>
-            {isCheapest && <span className="badge-positive">Lowest</span>}
+            {isCheapest && <span className="badge-positive">Cheapest</span>}
             {listing.packLabel && listing.packSize && listing.packSize > 1 && (
               <span className="badge-accent">{listing.packLabel}</span>
             )}
           </div>
 
           {hasError ? (
-            <p className="mt-2 text-sm text-[var(--text-muted)]">{listing.error}</p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {listing.prices.map((line) => (
-                <PriceBadge
-                  key={`${line.kind}-${line.label}`}
-                  line={line}
-                  highlight={highlightPrice === line && isCheapest}
-                />
-              ))}
+            <p className="mt-1 text-sm text-[var(--text-muted)]">{listing.error}</p>
+          ) : primary ? (
+            <div className="mt-1 flex items-baseline gap-2">
+              <p className="text-2xl font-bold tabular-nums text-[var(--text-primary)]">
+                {formatPrice(primary.amount)}
+              </p>
+              {primary.kind === "clubcard" && (
+                <span className="badge-accent">Clubcard</span>
+              )}
+              {(primary.kind === "unit_inc_vat" || primary.kind === "unit_ex_vat") && (
+                <span className="text-xs text-[var(--text-muted)]">each</span>
+              )}
             </div>
+          ) : null}
+
+          {secondary.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-[var(--accent)]">
+                More prices
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {secondary.map((line) => (
+                  <li
+                    key={`${line.kind}-${line.label}`}
+                    className="flex justify-between text-xs text-[var(--text-secondary)]"
+                  >
+                    <span>{line.label}</span>
+                    <span className="font-semibold tabular-nums text-[var(--text-primary)]">
+                      {line.percent != null ? `${line.percent}%` : formatPrice(line.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           {listing.note && (
@@ -132,9 +129,9 @@ function RetailerRow({
             href={listing.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="link-accent mt-3 inline-flex"
+            className="link-accent mt-2 inline-flex text-sm"
           >
-            View on {listing.retailerName} →
+            Buy at {listing.retailerName} →
           </a>
         </div>
       </div>
@@ -159,10 +156,10 @@ export function PriceResults({
     return (
       <div className="space-y-3" aria-live="polite">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-28 rounded-[var(--radius-card)]" />
+          <div key={i} className="skeleton h-24 rounded-[var(--radius-card)]" />
         ))}
         <p className="text-center text-sm text-[var(--text-muted)]">
-          {result?.statusMessage ?? "Searching retailers…"}
+          {result?.statusMessage ?? "Checking retailers…"}
         </p>
       </div>
     );
@@ -170,7 +167,7 @@ export function PriceResults({
 
   if (error) {
     return (
-      <div className="rounded-[var(--radius-card)] border border-[var(--danger)]/30 bg-[var(--danger)]/10 p-4 text-sm text-[#f0a8a8]">
+      <div className="rounded-[var(--radius-card)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] p-4 text-sm text-[var(--danger)]">
         {error}
       </div>
     );
@@ -182,7 +179,7 @@ export function PriceResults({
   const failed = result.listings.filter((l) => l.error && !l.prices.length);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {showProductHeader && result.product && (
         <div className="glass-card p-4">
           <p className="section-label">
@@ -209,22 +206,21 @@ export function PriceResults({
         </div>
       )}
 
-      <div className="space-y-3">
-        {priced.map((listing, index) => (
-          <RetailerRow
-            key={listing.retailerId}
-            listing={listing}
-            rank={index + 1}
-            isCheapest={listing.retailerId === result.cheapest?.retailerId}
-          />
+      {priced.map((listing, index) => (
+        <RetailerRow
+          key={listing.retailerId}
+          listing={listing}
+          rank={index + 1}
+          isCheapest={listing.retailerId === result.cheapest?.retailerId}
+        />
+      ))}
+
+      {loading &&
+        priced.length > 0 &&
+        priced.length < 6 &&
+        [1, 2].map((i) => (
+          <div key={`skel-${i}`} className="skeleton h-20 rounded-[var(--radius-card)]" />
         ))}
-        {loading &&
-          priced.length > 0 &&
-          priced.length < 6 &&
-          [1, 2].map((i) => (
-            <div key={`skel-${i}`} className="skeleton h-20 rounded-[var(--radius-card)]" />
-          ))}
-      </div>
 
       {failed.length > 0 && result.isComplete && (
         <details className="surface-card p-4 text-sm text-[var(--text-secondary)]">

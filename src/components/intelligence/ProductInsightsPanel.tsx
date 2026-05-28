@@ -4,9 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ProductIntelligenceCard } from "@/lib/intelligence/types";
 import {
-  buildRetailPricingInsights,
   getScoreRating,
-  type RetailPricingInsights,
   type ScoreRating,
   type ScoreTier,
 } from "@/lib/intelligence/retail-insights";
@@ -19,7 +17,6 @@ import type { RetailerListing } from "@/lib/types";
 interface Bundle extends ProductIntelligenceCard {
   similarProducts?: { productId: string; name: string; similarity: number }[];
   buyingAdvice?: string[];
-  retailPricing?: RetailPricingInsights;
   scoreRating?: ScoreRating;
 }
 
@@ -29,19 +26,8 @@ interface ProductInsightsPanelProps {
   liveListings?: RetailerListing[];
   productImage?: string | null;
   productName?: string;
-}
-
-function formatGbp(n: number | null | undefined) {
-  if (n == null) return "—";
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(n);
-}
-
-function formatPct(n: number | null | undefined) {
-  if (n == null) return "—";
-  return `${n.toFixed(1)}%`;
+  /** When false, skip API fetch until user opens the section */
+  active?: boolean;
 }
 
 function tierBadgeClass(tier: ScoreTier): string {
@@ -113,6 +99,7 @@ export function ProductInsightsPanel({
   liveListings = [],
   productImage,
   productName = "Product",
+  active = true,
 }: ProductInsightsPanelProps) {
   const [data, setData] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,20 +123,18 @@ export function ProductInsightsPanel({
   );
 
   useEffect(() => {
+    if (!active) return;
     load(Boolean(refreshKey));
-  }, [productId, refreshKey, load]);
-
-  const retail = useMemo(() => {
-    if (liveListings.length > 0) return buildRetailPricingInsights(liveListings);
-    return data?.retailPricing ?? null;
-  }, [liveListings, data?.retailPricing]);
+  }, [productId, refreshKey, load, active]);
 
   const scoreRating = useMemo(() => {
     if (data?.intelligence) return getScoreRating(data.intelligence.opportunity_score);
     return data?.scoreRating ?? null;
   }, [data]);
 
-  if (loading && !data && liveListings.length === 0) {
+  if (!active) return null;
+
+  if (loading && !data) {
     return (
       <div className="space-y-4">
         <div className="hero-card flex gap-4 p-5">
@@ -171,8 +156,6 @@ export function ProductInsightsPanel({
   if (!data) return null;
 
   const i = data.intelligence;
-  const margin = retail?.marginPercent ?? i.margin_percent;
-  const marginPositive = margin != null && margin >= 15;
 
   return (
     <section className="space-y-4">
@@ -201,9 +184,6 @@ export function ProductInsightsPanel({
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className={tierBadgeClass(scoreRating.tier)}>{scoreRating.label}</span>
-                {marginPositive && margin != null && (
-                  <span className="badge-positive">+{margin.toFixed(0)}% margin</span>
-                )}
                 <InfoTip topic={HELP_TOPICS.score_rating} label="Rating guide">
                   <span className="link-accent">Guide</span>
                 </InfoTip>
@@ -217,97 +197,29 @@ export function ProductInsightsPanel({
         </div>
       )}
 
-      {/* Primary price card — Total Sales style */}
-      <div className="surface-card p-5">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="section-label">Best buy price</p>
-            <p className="hero-value mt-1">
-              {retail?.lowestPrice != null ? formatGbp(retail.lowestPrice) : "—"}
-            </p>
-            {retail?.lowestRetailerName && (
-              <span className="badge-positive mt-2">at {retail.lowestRetailerName}</span>
-            )}
-          </div>
-          <InfoTip topic={HELP_TOPICS.lowest_price} label="Lowest price">
-            <span className="link-accent">Details</span>
-          </InfoTip>
-        </div>
-
-        <div className="mt-4">
-          <div className="breakdown-row">
-            <span className="text-sm text-[var(--text-secondary)]">Your cost (per unit)</span>
-            <span className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">
-              {formatGbp(retail?.unitCost)}
-            </span>
-          </div>
-          <div className="breakdown-row">
-            <span className="text-sm text-[var(--text-secondary)]">RRP (shelf)</span>
-            <span className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">
-              {formatGbp(retail?.rrp ?? i.estimated_resale)}
-            </span>
-          </div>
-          <div className="breakdown-row">
-            <span className="text-sm text-[var(--text-secondary)]">Wholesale via</span>
-            <span className="text-sm font-medium text-[var(--accent)]">
-              {retail?.unitCostRetailer ?? "—"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2×2 metric grid */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <p className="section-label">Unit economics</p>
-          <span className="link-accent">view report</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <StatTile
-            icon={
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-              </svg>
-            }
-            label="Margin"
-            value={formatPct(margin)}
-            sub="per unit"
-            topic={HELP_TOPICS.margin}
-            highlight={marginPositive}
-          />
-          <StatTile
-            icon={
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            }
-            label="POR"
-            value={retail?.porPercent != null ? formatPct(retail.porPercent) : "—"}
-            sub="Booker"
-            topic={HELP_TOPICS.por}
-          />
-          <StatTile
-            icon={
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
-            label="Confidence"
-            value={`${(i.confidence_score * 100).toFixed(0)}%`}
-            topic={HELP_TOPICS.confidence}
-          />
-          <StatTile
-            icon={
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
-            label="Turnover"
-            value={i.estimated_turnover}
-            sub="sell-through"
-            topic={HELP_TOPICS.turnover}
-          />
-        </div>
+      {/* Confidence + turnover */}
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile
+          icon={
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          label="Confidence"
+          value={`${(i.confidence_score * 100).toFixed(0)}%`}
+          topic={HELP_TOPICS.confidence}
+        />
+        <StatTile
+          icon={
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          label="Turnover"
+          value={i.estimated_turnover}
+          sub="sell-through"
+          topic={HELP_TOPICS.turnover}
+        />
       </div>
 
       {/* Trend + season */}

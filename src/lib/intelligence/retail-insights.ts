@@ -1,3 +1,5 @@
+import { listingUnitPrice } from "../pack-pricing";
+import { extractWholesaleUnitCost } from "../shelf-pricing";
 import { RETAILER_NAMES } from "../retailers/shared";
 import type { DbListingRow } from "../db/products";
 import type { PriceLine, RetailerId, RetailerListing } from "../types";
@@ -115,95 +117,83 @@ export type BuySignal = ScoreRating;
 
 type ListingLike = {
   retailerId: RetailerId;
+  prices?: PriceLine[];
   lastPrices?: PriceLine[] | null;
   lastSortPrice?: number | null;
+  sortPrice?: number;
+  productName?: string;
+  url?: string;
 };
 
-function pickAmount(line: PriceLine | undefined): number | undefined {
-  return line?.amount;
+function roundPct(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
-function comparableUnitPrice(prices: PriceLine[]): number | null {
-  const unit =
-    prices.find((p) => p.kind === "unit_inc_vat") ??
-    prices.find((p) => p.kind === "unit_ex_vat");
-  if (unit) return unit.amount;
+function toRetailerListing(row: ListingLike): RetailerListing | null {
+  const prices = row.prices?.length
+    ? row.prices
+    : row.lastPrices ?? [];
+  if (!prices.length) return null;
 
-  const shelf =
-    prices.find((p) => p.kind === "clubcard") ??
-    prices.find((p) => p.kind === "standard") ??
-    prices.find((p) => p.kind === "inc_vat");
-  return shelf ? shelf.amount : null;
-}
-
-function unitCostFromPrices(
-  prices: PriceLine[],
-  retailerId: RetailerId,
-): number | null {
-  const unitEx = prices.find((p) => p.kind === "unit_ex_vat");
-  const unitInc = prices.find((p) => p.kind === "unit_inc_vat");
-  if (unitEx) return unitEx.amount;
-  if (unitInc) return unitInc.amount;
-
-  if (retailerId === "booker") {
-    const ex = prices.find((p) => p.kind === "ex_vat");
-    const inc = prices.find((p) => p.kind === "inc_vat");
-    return ex?.amount ?? inc?.amount ?? null;
-  }
-  return null;
+  return {
+    retailerId: row.retailerId,
+    retailerName: RETAILER_NAMES[row.retailerId],
+    productName: row.productName ?? "",
+    url: row.url ?? "",
+    inStock: true,
+    prices,
+    sortPrice:
+      row.sortPrice ??
+      (row.lastSortPrice != null ? Number(row.lastSortPrice) : 0),
+    fetchedAt: "",
+  };
 }
 
 export function buildRetailPricingInsights(
   listings: ListingLike[] | RetailerListing[],
 ): RetailPricingInsights {
+  const normalized = listings
+    .map((row) => toRetailerListing(row))
+    .filter((l): l is RetailerListing => l != null);
+
+  const { unitCost, unitCostRetailer, bookerRrp, bookerPorAtRrp } =
+    extractWholesaleUnitCost(normalized);
+
   let lowestPrice: number | null = null;
   let lowestRetailerId: RetailerId | null = null;
 
-  let unitCost: number | null = null;
-  let unitCostRetailer: string | null = null;
-
-  let rrp: number | null = null;
-  let porPercent: number | null = null;
-
-  for (const row of listings) {
-    const prices =
-      "prices" in row && row.prices
-        ? row.prices
-        : (row as DbListingRow).lastPrices ?? [];
-    if (!prices.length) continue;
-
-    const unitComparable = comparableUnitPrice(prices);
-    if (unitComparable != null) {
-      if (lowestPrice == null || unitComparable < lowestPrice) {
-        lowestPrice = unitComparable;
-        lowestRetailerId = row.retailerId;
-      }
-    }
-
-    const rrpLine = prices.find((p) => p.kind === "rrp");
-    if (rrpLine && rrp == null) rrp = rrpLine.amount;
-
-    const porLine = prices.find((p) => p.kind === "por");
-    if (porLine?.percent != null && porPercent == null) {
-      porPercent = porLine.percent;
-    }
-
-    const wholesale = unitCostFromPrices(prices, row.retailerId);
-    if (wholesale != null && (unitCost == null || wholesale < unitCost)) {
-      unitCost = wholesale;
-      unitCostRetailer = RETAILER_NAMES[row.retailerId];
+  for (const listing of normalized) {
+    if (listing.retailerId === "booker") continue;
+    const unitComparable = listingUnitPrice(listing);
+    if (unitComparable == null) continue;
+    if (lowestPrice == null || unitComparable < lowestPrice) {
+      lowestPrice = unitComparable;
+      lowestRetailerId = listing.retailerId;
     }
   }
+
+  const rrp = bookerRrp;
 
   let marginPercent: number | null = null;
   let marginLabel = "Per unit";
 
   if (unitCost != null && rrp != null && rrp > 0) {
-    marginPercent = ((rrp - unitCost) / rrp) * 100;
+    marginPercent = roundPct(((rrp - unitCost) / rrp) * 100);
     marginLabel = "Per unit (vs RRP)";
   } else if (unitCost != null && lowestPrice != null && lowestPrice > 0) {
-    marginPercent = ((lowestPrice - unitCost) / lowestPrice) * 100;
+    marginPercent = roundPct(((lowestPrice - unitCost) / lowestPrice) * 100);
     marginLabel = "Per unit (vs lowest retail)";
+  }
+
+  let porPercent = bookerPorAtRrp;
+  if (
+    porPercent == null &&
+    unitCost != null &&
+    unitCost > 0 &&
+    rrp != null &&
+    rrp > unitCost
+  ) {
+    porPercent = roundPct(((rrp - unitCost) / unitCost) * 100);
   }
 
   return {

@@ -13,6 +13,8 @@ import type { RetailerListing } from "@/lib/types";
 interface ShelfPricingPanelProps {
   listings: RetailerListing[];
   productKey?: string;
+  /** Render without outer card — for use inside collapsible sections */
+  embedded?: boolean;
 }
 
 function formatGbp(n: number | null | undefined) {
@@ -21,11 +23,6 @@ function formatGbp(n: number | null | undefined) {
     style: "currency",
     currency: "GBP",
   }).format(n);
-}
-
-function formatPct(n: number | null | undefined) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(1)}%`;
 }
 
 function parseSellInput(raw: string): number | null {
@@ -38,6 +35,7 @@ function parseSellInput(raw: string): number | null {
 export function ShelfPricingPanel({
   listings,
   productKey = "default",
+  embedded = false,
 }: ShelfPricingPanelProps) {
   const membershipOffers = useMemo(
     () => detectMembershipOffers(listings),
@@ -69,29 +67,26 @@ export function ShelfPricingPanel({
     return computeShelfEconomics(sellPrice, listings, useMembership);
   }, [sellPrice, listings, useMembership]);
 
-  const marginPositive =
-    economics?.marginPercent != null && economics.marginPercent >= 15;
-  const porPositive = economics?.porPercent != null && economics.porPercent >= 25;
-
   if (!listings.some((l) => l.prices.length > 0)) {
     return null;
   }
 
-  return (
-    <section className="surface-card p-5">
-      <div className="mb-4 flex items-start justify-between gap-2">
+  const content = (
+    <>
+      <div className={embedded ? "mb-3" : "mb-4 flex items-start justify-between gap-2"}>
         <div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">
-            Your shelf price
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Try a shelf price
           </h2>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Enter what you will charge customers to see margin and POR on this
-            product.
+            See profit per unit at different selling prices.
           </p>
         </div>
-        <InfoTip topic={HELP_TOPICS.margin} label="Margin & POR">
-          <span className="link-accent shrink-0 text-sm">Help</span>
-        </InfoTip>
+        {!embedded && (
+          <InfoTip topic={HELP_TOPICS.margin} label="Shelf pricing">
+            <span className="link-accent shrink-0 text-sm">Help</span>
+          </InfoTip>
+        )}
       </div>
 
       <label className="block">
@@ -153,29 +148,16 @@ export function ShelfPricingPanel({
 
       {economics && sellPrice != null ? (
         <>
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            <div
-              className={`stat-tile text-center ${marginPositive ? "ring-1 ring-[var(--positive)]/30" : ""}`}
-            >
-              <p className="section-label">Margin</p>
-              <p className="stat-value mt-1 text-lg">
-                {formatPct(economics.marginPercent)}
+          <div className="mt-4 stat-tile text-center">
+            <p className="section-label">Profit per unit</p>
+            <p className="stat-value mt-1 text-lg">
+              {formatGbp(economics.profitPerUnit)}
+            </p>
+            {economics.marginPercent != null && economics.marginPercent < 15 && (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Low margin — check card fees and wastage before bulk ordering.
               </p>
-            </div>
-            <div
-              className={`stat-tile text-center ${porPositive ? "ring-1 ring-[var(--positive)]/30" : ""}`}
-            >
-              <p className="section-label">POR</p>
-              <p className="stat-value mt-1 text-lg">
-                {formatPct(economics.porPercent)}
-              </p>
-            </div>
-            <div className="stat-tile text-center">
-              <p className="section-label">Profit</p>
-              <p className="stat-value mt-1 text-lg">
-                {formatGbp(economics.profitPerUnit)}
-              </p>
-            </div>
+            )}
           </div>
 
           <div className="mt-4 space-y-0">
@@ -210,30 +192,19 @@ export function ShelfPricingPanel({
                 </span>
               </div>
             )}
-            {economics.bookerPorAtRrp != null && economics.bookerRrp != null && (
-              <div className="breakdown-row">
-                <span className="text-sm text-[var(--text-secondary)]">
-                  Booker POR at RRP ({formatGbp(economics.bookerRrp)})
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">
-                  {formatPct(economics.bookerPorAtRrp)}
-                </span>
-              </div>
-            )}
           </div>
-
-          {economics.marginPercent != null && economics.marginPercent < 15 && (
-            <p className="mt-3 text-xs text-[var(--text-muted)]">
-              Margin under 15% — check card fees and wastage before ordering a
-              large quantity.
-            </p>
-          )}
         </>
       ) : (
         <p className="mt-4 text-sm text-[var(--text-muted)]">
-          Enter a selling price to calculate margin and POR.
+          Enter a selling price to see profit per unit.
         </p>
       )}
-    </section>
+    </>
   );
+
+  if (embedded) {
+    return <div>{content}</div>;
+  }
+
+  return <section className="surface-card p-5">{content}</section>;
 }

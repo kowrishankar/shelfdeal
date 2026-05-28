@@ -46,8 +46,50 @@ function goToProductParams(
   });
 }
 
-const FLAVOR_CHIP_CLASS =
-  "border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--accent)]/40 hover:text-[var(--text-primary)]";
+const FLAVOR_BUTTON_CLASS =
+  "flex min-h-[3.25rem] w-full items-center justify-between gap-3 rounded-xl border-2 border-[var(--border-strong)] bg-[var(--bg-elevated)] px-4 py-3 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-subtle)] active:scale-[0.99]";
+
+function CompareChevron() {
+  return (
+    <svg
+      className="h-5 w-5 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function FlavorButton({
+  flavor,
+  onClick,
+}: {
+  flavor: DiscoveryFlavorOption;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className={FLAVOR_BUTTON_CLASS}>
+      <span className="min-w-0">
+        <span className="block text-base font-semibold text-[var(--text-primary)]">
+          {flavor.label}
+        </span>
+        {flavor.variantCount > 1 && (
+          <span className="mt-0.5 block text-sm text-[var(--text-muted)]">
+            {flavor.variantCount} sizes to compare
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-[var(--accent)]">
+        Compare
+        <CompareChevron />
+      </span>
+    </button>
+  );
+}
 
 function countDiscoveryFlavors(groups: ProductFamilySummary[]): number {
   let total = 0;
@@ -193,15 +235,15 @@ export function SearchResultsClient({ query }: SearchResultsClientProps) {
 
       {groups.length > 0 && (
         <section className="space-y-4">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Pick a flavour to compare sizes and packs across retailers.
+          <p className="text-base text-[var(--text-secondary)]">
+            Tap a flavour to compare prices across retailers.
           </p>
           {groups.map((family) => {
             const flavors = groupVariantsByFlavor(family.label, family.variants);
             return (
               <article key={family.id} className="surface-card overflow-hidden">
-                <div className="flex items-start gap-4 p-4">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-elevated)]">
+                <div className="flex items-start gap-4 p-4 pb-3">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-elevated)] sm:h-24 sm:w-24">
                     <ProductImage
                       src={family.imageUrl}
                       alt={family.label}
@@ -209,34 +251,24 @@ export function SearchResultsClient({ query }: SearchResultsClientProps) {
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                        {family.label}
-                      </h2>
-                      <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs text-[var(--text-secondary)]">
-                        {flavors.length} flavour{flavors.length === 1 ? "" : "s"} ·{" "}
-                        {family.retailerCount} supplier
-                        {family.retailerCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {flavors.map((flavor) => (
-                        <button
-                          key={flavor.key}
-                          type="button"
-                          onClick={() => navigateToFlavor(family, flavor)}
-                          className={`rounded-full border px-4 py-2 text-sm font-medium transition ${FLAVOR_CHIP_CLASS}`}
-                        >
-                          {flavor.label}
-                          {flavor.variantCount > 1 && (
-                            <span className="ml-1.5 text-xs font-normal text-[var(--text-muted)]">
-                              {flavor.variantCount} sizes
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
+                    <h2 className="text-lg font-bold text-[var(--text-primary)] sm:text-xl">
+                      {family.label}
+                    </h2>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      {flavors.length} flavour{flavors.length === 1 ? "" : "s"} ·{" "}
+                      {family.retailerCount} supplier
+                      {family.retailerCount === 1 ? "" : "s"}
+                    </p>
                   </div>
+                </div>
+                <div className="flex flex-col gap-2.5 px-4 pb-4">
+                  {flavors.map((flavor) => (
+                    <FlavorButton
+                      key={flavor.key}
+                      flavor={flavor}
+                      onClick={() => navigateToFlavor(family, flavor)}
+                    />
+                  ))}
                 </div>
               </article>
             );
@@ -273,9 +305,9 @@ export function SearchResultsClient({ query }: SearchResultsClientProps) {
                   key={variant.id}
                   type="button"
                   onClick={() => navigateToFlavor(pseudoFamily, pick)}
-                  className="surface-card flex w-full items-center gap-3 p-3 text-left transition hover:ring-2 hover:ring-[var(--accent)]/40"
+                  className="surface-card flex min-h-[4.5rem] w-full items-center gap-4 p-4 text-left transition hover:ring-2 hover:ring-[var(--accent)]/30 active:scale-[0.99]"
                 >
-                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-elevated)]">
                     <ProductImage
                       src={variant.imageUrl}
                       alt={variant.label}
@@ -283,14 +315,18 @@ export function SearchResultsClient({ query }: SearchResultsClientProps) {
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-sm font-semibold text-[var(--text-primary)]">
+                    <p className="line-clamp-2 text-base font-semibold text-[var(--text-primary)]">
                       {variant.label}
                     </p>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
                       {variant.retailerCount} supplier
                       {variant.retailerCount === 1 ? "" : "s"}
                     </p>
                   </div>
+                  <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-[var(--accent)]">
+                    Compare
+                    <CompareChevron />
+                  </span>
                 </button>
               );
             })}

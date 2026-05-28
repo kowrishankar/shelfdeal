@@ -100,11 +100,7 @@ export function AppShell({
       <main className="flex-1 pb-28">{children}</main>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)] px-6 py-3"
-        style={{
-          background: "rgba(24, 31, 40, 0.92)",
-          backdropFilter: "blur(20px)",
-        }}
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)] bg-[var(--bg-elevated)]/95 px-6 py-3 backdrop-blur-xl"
         aria-label="Main"
       >
         <div className="mx-auto flex max-w-lg items-center justify-around">
