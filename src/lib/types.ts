@@ -69,7 +69,6 @@ export interface PriceComparisonState {
   cheapest?: RetailerListing;
   statusMessage?: string;
   phase?: "cache" | "discover" | "prices";
-  isPartial: boolean;
   isComplete: boolean;
   fetchedAt: string;
 }

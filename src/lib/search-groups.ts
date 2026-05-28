@@ -29,6 +29,8 @@ export interface GroupedSearchResult {
   dbProducts: DbProductSuggestion[];
   groups: ProductFamilyGroup[];
   other: ProductVariantOption[];
+  /** Raw hit counts per retailer from the latest discover scrape */
+  retailerHits: Partial<Record<string, number>>;
 }
 
 function familyId(key: string): string {
@@ -204,6 +206,10 @@ export async function discoverGroupedSearch(
     : [];
 
   const hits = await discoverAcrossRetailers(trimmed);
+  const retailerHits: Partial<Record<string, number>> = {};
+  for (const h of hits) {
+    retailerHits[h.retailerId] = (retailerHits[h.retailerId] ?? 0) + 1;
+  }
   const variants = buildProductVariantsFromHits(trimmed, hits, { limit: null });
   const usedUrls = new Set(
     variants.flatMap((v) => v.listings.map((l) => l.url)),
@@ -227,5 +233,6 @@ export async function discoverGroupedSearch(
     dbProducts,
     groups,
     other,
+    retailerHits,
   };
 }

@@ -29,7 +29,6 @@ export type StreamEvent =
       cheapest?: RetailerListing;
       total: number;
       priced: number;
-      partial?: boolean;
     }
   | { type: "error"; message: string };
 
@@ -133,16 +132,6 @@ export async function* streamPriceComparison(
         }
       }
     }
-
-    if (pricedByRetailer.size >= 2) {
-      yield {
-        type: "done",
-        cheapest: sortCheapest([...pricedByRetailer.values()]),
-        total: dbListings.length,
-        priced: pricedByRetailer.size,
-        partial: true,
-      };
-    }
   }
 
   const needsDiscovery =
@@ -222,22 +211,7 @@ export async function* streamPriceComparison(
   });
 
   const queue = createEventQueue();
-  let earlyDoneSent = pricedByRetailer.size >= 2;
   let finishedCount = 0;
-
-  const maybeEarlyDone = () => {
-    const priced = [...pricedByRetailer.values()].filter((l) => l.prices.length > 0);
-    if (!earlyDoneSent && priced.length >= 2) {
-      queue.push({
-        type: "done",
-        cheapest: sortCheapest(priced),
-        total: dbListings.length,
-        priced: priced.length,
-        partial: true,
-      });
-      earlyDoneSent = true;
-    }
-  };
 
   void (async () => {
     await Promise.all(
@@ -256,7 +230,6 @@ export async function* streamPriceComparison(
           }
           pricedByRetailer.set(listing.retailerId, listing);
           queue.push({ type: "listing", listing });
-          maybeEarlyDone();
         } catch {
           const cached = rowToListing(row, product!.canonicalName);
           const listing =
@@ -288,7 +261,6 @@ export async function* streamPriceComparison(
               cheapest: sortCheapest(priced),
               total: dbListings.length,
               priced: priced.length,
-              partial: false,
             });
             queue.close();
           }
@@ -297,13 +269,14 @@ export async function* streamPriceComparison(
     );
 
     if (toFetch.length === 0) {
-      const priced = [...pricedByRetailer.values()].filter((l) => l.prices.length > 0);
+      const priced = [...pricedByRetailer.values()].filter(
+        (l) => l.prices.length > 0,
+      );
       queue.push({
         type: "done",
         cheapest: sortCheapest(priced),
         total: dbListings.length,
         priced: priced.length,
-        partial: false,
       });
       queue.close();
     }

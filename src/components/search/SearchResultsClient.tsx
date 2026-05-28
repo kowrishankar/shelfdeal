@@ -10,6 +10,7 @@ import {
   writeDiscoverCache,
 } from "@/lib/search-discovery-cache";
 import { normalizeForMatch } from "@/lib/text-normalize";
+import { RETAILER_NAMES } from "@/lib/retailers/shared";
 import type {
   DiscoverSearchResponse,
   ProductFamilySummary,
@@ -218,6 +219,18 @@ export function SearchResultsClient({ query }: SearchResultsClientProps) {
 
   return (
     <div className="space-y-8">
+      {data?.retailerHits && Object.keys(data.retailerHits).length > 0 && (
+        <p className="text-xs text-[var(--text-muted)]">
+          Found on:{" "}
+          {["tesco", "asda", "morrisons", "booker", "amazon", "costco", "sainsburys"]
+            .filter((id) => (data.retailerHits?.[id] ?? 0) > 0)
+            .map(
+              (id) =>
+                `${RETAILER_NAMES[id as keyof typeof RETAILER_NAMES] ?? id} (${data.retailerHits![id]})`,
+            )
+            .join(" · ")}
+        </p>
+      )}
       {mainProducts.length > 0 && (
         <section>
           <div className={PRODUCT_GRID}>

@@ -59,7 +59,10 @@ function extractTescoTiles(html: string): TescoTile[] {
 
 export async function searchTesco(query: string): Promise<RetailerSearchHit[]> {
   const url = `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(query)}`;
-  const html = await fetchHtml(url);
+  const html = await fetchHtml(url, {
+    warmOrigin: "https://www.tesco.com",
+    referer: "https://www.tesco.com/groceries/en-GB/",
+  });
   const productUrls = extractItemListUrls(html);
   const tiles = extractTescoTiles(html);
 
@@ -107,7 +110,10 @@ export async function searchTesco(query: string): Promise<RetailerSearchHit[]> {
 
 export async function extractTescoBarcode(url: string): Promise<string | undefined> {
   try {
-    const html = await fetchHtml(url);
+    const html = await fetchHtml(url, {
+      warmOrigin: "https://www.tesco.com",
+      referer: "https://www.tesco.com/groceries/en-GB/",
+    });
     const products = extractJsonLdProducts(html);
     const gtin = (products[0] as { gtin13?: string })?.gtin13;
     return gtin;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { discoverGroupedSearch } from "@/lib/search-groups";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         retailerCount: v.retailerCount,
         score: v.score,
       })),
+      retailerHits: result.retailerHits,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Discover failed";

@@ -6,7 +6,7 @@ Mobile-friendly UK retailer price comparison for independent shops, corner store
 
 ### Price comparison
 - **Search any product** — discovers listings across Tesco, ASDA, Booker, Amazon, Costco, and Sainsbury's
-- **Progressive results** — prices appear via Server-Sent Events as each retailer responds; first summary shows once **2+ prices** are in
+- **Progressive results** — prices stream in as each retailer responds; full comparison when all fetches finish
 - **Neon Postgres** — products, retailer URLs, and price history saved for faster repeat searches
 - **Tesco Clubcard** — regular vs Clubcard price
 - **Booker wholesale** — trade ex-VAT and inc-VAT

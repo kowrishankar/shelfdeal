@@ -61,17 +61,10 @@ export function ShelfDealMark({
         strokeWidth="1.5"
         strokeLinecap="round"
       />
-      <text
-        x="30.25"
-        y="30.5"
+      <path
         fill="#12181f"
-        fontSize="7.5"
-        fontWeight="700"
-        fontFamily="system-ui, sans-serif"
-        textAnchor="middle"
-      >
-        £
-      </text>
+        d="M28.2 26.8h1.4c.6 0 1.1.5 1.1 1.1s-.5 1.1-1.1 1.1h-1.4v1.1h1.4c1.2 0 2.2-1 2.2-2.2s-1-2.2-2.2-2.2h-1.4v-1.1zm0 3.4h1.5c.8 0 1.4-.6 1.4-1.4v-.2c0-.8-.6-1.4-1.4-1.4h-1.5v3z"
+      />
       <defs>
         <linearGradient id="sd-bg" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
           <stop stopColor="#243040" />

@@ -28,4 +28,5 @@ export interface DiscoverSearchResponse {
   dbProducts: SearchSuggestion[];
   groups: ProductFamilySummary[];
   other: DiscoverVariantSummary[];
+  retailerHits?: Partial<Record<string, number>>;
 }

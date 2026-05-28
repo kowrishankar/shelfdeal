@@ -135,7 +135,13 @@ export function ProductPageClient({
         />
       </div>
 
-      {displayName && searchQuery && (
+      {displayName && searchQuery && !result?.isComplete && (
+        <p className="mt-5 text-sm text-[var(--text-secondary)]">
+          {result?.statusMessage ?? `Comparing prices for “${displayName}”…`}
+        </p>
+      )}
+
+      {displayName && searchQuery && result?.isComplete && (
         <div className="mt-5 flex flex-wrap items-start justify-between gap-2">
           <h1 className="min-w-0 flex-1 text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             {displayName}
@@ -144,7 +150,7 @@ export function ProductPageClient({
         </div>
       )}
 
-      {resolvedId && (
+      {resolvedId && result?.isComplete && (
         <div className="mt-5">
           <ProductInsightsPanel
             productId={resolvedId}
@@ -156,7 +162,7 @@ export function ProductPageClient({
         </div>
       )}
 
-      {(result?.listings?.length ?? 0) > 0 && (
+      {result?.isComplete && (result?.listings?.length ?? 0) > 0 && (
         <div className="mt-6">
           <ShelfPricingPanel
             listings={result?.listings ?? []}
@@ -168,7 +174,7 @@ export function ProductPageClient({
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="section-label">Live prices</h2>
-          {result?.cheapest && (
+          {result?.isComplete && result?.cheapest && (
             <span className="badge-positive">
               Best{" "}
               {new Intl.NumberFormat("en-GB", {

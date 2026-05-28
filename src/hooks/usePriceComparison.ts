@@ -8,7 +8,6 @@ const emptyState = (query = ""): PriceComparisonState => ({
   query,
   product: null,
   listings: [],
-  isPartial: false,
   isComplete: false,
   fetchedAt: new Date().toISOString(),
 });
@@ -67,8 +66,7 @@ export function usePriceComparison() {
           ...prev,
           listings: sortListings(prev.listings),
           cheapest: event.cheapest ?? prev.cheapest,
-          isPartial: event.partial ?? false,
-          isComplete: !event.partial,
+          isComplete: true,
           fetchedAt: new Date().toISOString(),
           product: prev.product,
         };
@@ -120,11 +118,10 @@ export function usePriceComparison() {
           setResult((prev) => {
             if (!prev) return prev;
             const next = applyEvent(event, prev);
-            if (event.type === "done" && !event.partial) setLoading(false);
-            if (event.type === "done" && event.partial) setLoading(true);
+            if (event.type === "done") setLoading(false);
             return next;
           });
-          if (event.type === "done" && !event.partial) source.close();
+          if (event.type === "done") source.close();
         } catch {
           // ignore
         }
