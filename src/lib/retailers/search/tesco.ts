@@ -1,7 +1,7 @@
 import { fetchHtml } from "../../http";
 import { extractPackInfo } from "../../product-matching";
 import { extractJsonLdProducts } from "../../parse-json-ld";
-import { searchTescoViaXapi } from "../tesco-xapi";
+import { normalizeTescoProductUrl, searchTescoViaXapi } from "../tesco-xapi";
 import { extractImageFromHtml, normalizeImageUrl } from "./images";
 import type { RetailerSearchHit } from "./types";
 
@@ -101,9 +101,11 @@ async function searchTescoHtml(query: string): Promise<RetailerSearchHit[]> {
 
     hits.push({
       retailerId: "tesco",
-      url: productUrl.startsWith("http")
+      url: normalizeTescoProductUrl(
+        productUrl.startsWith("http")
         ? productUrl
-        : `https://www.tesco.com${productUrl}`,
+          : `https://www.tesco.com${productUrl}`,
+      ),
       name,
       packLabel: extractPackInfo(name).packLabel,
       imageUrl: tile?.imageUrl ?? extractImageFromHtml(html),
@@ -116,7 +118,7 @@ async function searchTescoHtml(query: string): Promise<RetailerSearchHit[]> {
       if (!id) continue;
       hits.push({
         retailerId: "tesco",
-        url: `https://www.tesco.com/groceries/en-GB/products/${id}`,
+        url: `https://www.tesco.com/shop/en-GB/products/${id}`,
         name: tile.title,
         packLabel: extractPackInfo(tile.title).packLabel,
         imageUrl: tile.imageUrl,
@@ -134,7 +136,7 @@ async function searchTescoHtml(query: string): Promise<RetailerSearchHit[]> {
       const tile = tiles[i];
       hits.push({
         retailerId: "tesco",
-        url: `https://www.tesco.com/groceries/en-GB/products/${id}`,
+        url: `https://www.tesco.com/shop/en-GB/products/${id}`,
         name: tile?.title ?? `Tesco product ${id}`,
         imageUrl: tile?.imageUrl,
       });
@@ -156,7 +158,7 @@ export async function searchTesco(query: string): Promise<RetailerSearchHit[]> {
 
 export async function extractTescoBarcode(url: string): Promise<string | undefined> {
   try {
-    const html = await fetchHtml(url, {
+    const html = await fetchHtml(normalizeTescoProductUrl(url), {
       warmUrl: "https://www.tesco.com/groceries/en-GB/",
       referer: "https://www.tesco.com/groceries/en-GB/",
       scraperProxy: Boolean(process.env.SCRAPER_API_KEY),

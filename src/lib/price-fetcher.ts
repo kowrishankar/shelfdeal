@@ -15,6 +15,7 @@ import {
   isAsdaGroceriesProductUrl,
 } from "./retailers/asda-algolia";
 import { fetchAmazonPrice, isAmazonProductUrl } from "./retailers/amazon";
+import { normalizeTescoProductUrl } from "./retailers/tesco-xapi";
 import { fetchHtml } from "./http";
 
 export const ACTIVE_RETAILERS: RetailerId[] = [
@@ -28,7 +29,8 @@ export const ACTIVE_RETAILERS: RetailerId[] = [
 ];
 
 async function fetchTesco(url: string): Promise<RetailerListing> {
-  return fetchJsonLdListing("tesco", url, (html, base) => {
+  const normalizedUrl = normalizeTescoProductUrl(url);
+  return fetchJsonLdListing("tesco", normalizedUrl, (html, base) => {
     const club = parseTescoClubcardMeta(html);
     const prices = [];
 
@@ -52,13 +54,13 @@ async function fetchTesco(url: string): Promise<RetailerListing> {
     if (prices.length === 0) return base;
 
     const sortPrice = Math.min(...prices.map((p) => p.amount));
-    const product = base ?? listingFromJsonLd("tesco", url, html);
+    const product = base ?? listingFromJsonLd("tesco", normalizedUrl, html);
 
     return {
       retailerId: "tesco",
       retailerName: "Tesco",
       productName: product?.productName ?? "Product",
-      url,
+      url: normalizedUrl,
       imageUrl: product?.imageUrl,
       inStock: product?.inStock ?? true,
       prices,

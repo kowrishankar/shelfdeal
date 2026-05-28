@@ -48,7 +48,14 @@ interface TescoSearchResponse {
 }
 
 function tescoProductUrl(tpnc: string): string {
-  return `https://www.tesco.com/groceries/en-GB/products/${tpnc}`;
+  return `https://www.tesco.com/shop/en-GB/products/${tpnc}`;
+}
+
+export function normalizeTescoProductUrl(url: string): string {
+  return url.replace(
+    /https:\/\/www\.tesco\.com\/groceries\/en-GB\/products\/(\d+)/i,
+    "https://www.tesco.com/shop/en-GB/products/$1",
+  );
 }
 
 export async function searchTescoViaXapi(
