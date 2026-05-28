@@ -20,6 +20,7 @@ export interface ProductVariantOption {
   imageUrl?: string;
   retailerCount: number;
   score: number;
+  confidence: "high" | "medium" | "low";
   listings: RetailerSearchHit[];
 }
 
@@ -123,6 +124,12 @@ export function buildProductVariantsFromHits(
       imageUrl,
       retailerCount: listings.length,
       score: group.maxScore,
+      confidence:
+        group.maxScore >= 65
+          ? "high"
+          : group.maxScore >= 40
+            ? "medium"
+            : "low",
       listings,
     });
   }

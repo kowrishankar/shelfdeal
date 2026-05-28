@@ -38,6 +38,9 @@ export interface RetailerListing {
   prices: PriceLine[];
   sortPrice: number;
   fetchedAt: string;
+  /** Match confidence from canonical listing linking (when available). */
+  matchConfidenceLabel?: "high" | "medium" | "low";
+  matchConfidenceScore?: number;
   /** Units per case/pack when sold as multipack */
   packSize?: number;
   packLabel?: string;

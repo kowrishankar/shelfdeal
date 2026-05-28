@@ -7,6 +7,7 @@ import {
   matchIncludes,
   normalizeForMatch,
   stripDiacritics,
+  tokenizeForMatch,
 } from "./text-normalize";
 
 /** Flavour variants — penalised when the query does not name a flavour */
@@ -37,6 +38,10 @@ function volumeMlFromText(text: string): number | null {
   if (ml) return Math.round(Number(ml[1]));
   const cl = norm.match(/(\d+(?:\.\d+)?)\s*cl\b/);
   if (cl) return Math.round(Number(cl[1]) * 10);
+  const litre = norm.match(/(\d+(?:\.\d+)?)\s*(?:l|ltr|litre|liter)\b/);
+  if (litre) return Math.round(Number(litre[1]) * 1000);
+  const oz = norm.match(/(\d+(?:\.\d+)?)\s*oz\b/);
+  if (oz) return Math.round(Number(oz[1]) * 29.5735);
   return null;
 }
 
@@ -180,6 +185,16 @@ export function extractPackInfo(text: string): {
     };
   }
 
+  const pkMatch = t.match(/\b(\d+)\s*(?:pk|pack)\b/i);
+  if (pkMatch) {
+    const n = Number(pkMatch[1]);
+    return {
+      packLabel: `${n} pack`,
+      isMultipack: n > 1,
+      unitCount: n,
+    };
+  }
+
   const nx = t.match(/(\d+)\s*x\s*(\d+)\s*ml/i);
   if (nx) {
     const n = Number(nx[1]);
@@ -278,12 +293,132 @@ const PRODUCT_LINE_PHRASES = [
   "pepsi",
 ];
 
+const BRAND_ALIASES: Record<string, string[]> = {
+  "red bull": ["red bull", "redbull", "rb"],
+  "coca cola": ["coca cola", "coca-cola", "coke"],
+  pepsi: ["pepsi"],
+  "monster energy": ["monster", "monster energy"],
+  lucozade: ["lucozade"],
+};
+
+const FLAVOR_ALIASES: Record<string, string[]> = {
+  original: ["original", "classic"],
+  "sugar free": ["sugar free", "sugarfree", "zero", "sf"],
+  watermelon: ["watermelon"],
+  tropical: ["tropical"],
+  "coconut berry": ["coconut berry", "coconut", "coconut edition"],
+  peach: ["peach", "peach edition"],
+};
+
+interface ProductAttributes {
+  brand: string | null;
+  flavor: string | null;
+  volumeMl: number | null;
+  packCount: number | null;
+  isMultipack: boolean;
+  family: string | null;
+  sugarFree: boolean | null;
+}
+
+function detectCanonicalFromAliases(
+  text: string,
+  aliases: Record<string, string[]>,
+): string | null {
+  for (const [canonical, list] of Object.entries(aliases)) {
+    if (list.some((alias) => text.includes(normalizeForMatch(alias)))) {
+      return canonical;
+    }
+  }
+  return null;
+}
+
+function extractProductAttributes(name: string, packLabel?: string): ProductAttributes {
+  const combined = normalizeForMatch(`${decodeHtmlEntities(name)} ${packLabel ?? ""}`);
+  const pack = extractPackInfo(combined);
+  const brand = detectCanonicalFromAliases(combined, BRAND_ALIASES);
+  const flavor = detectCanonicalFromAliases(combined, FLAVOR_ALIASES);
+  const sugarFree =
+    flavor === "sugar free"
+      ? true
+      : /\b(sugar free|sugarfree|zero|sf)\b/.test(combined)
+        ? true
+        : /\boriginal|classic\b/.test(combined)
+          ? false
+          : null;
+  const family =
+    brand != null
+      ? `${brand} ${combined.includes("energy") ? "energy drink" : "product"}`
+      : null;
+  return {
+    brand,
+    flavor,
+    volumeMl: volumeMlFromText(combined),
+    packCount: pack.unitCount,
+    isMultipack: pack.isMultipack,
+    family,
+    sugarFree,
+  };
+}
+
+export interface NormalizedListingIdentity {
+  brand: string | null;
+  family: string | null;
+  flavor: string | null;
+  sugarFree: boolean | null;
+  sizeMl: number | null;
+  packCount: number | null;
+  isMultipack: boolean;
+  unitType: "can" | "bottle" | "pack" | "unit";
+  fingerprint: string;
+}
+
+export function normalizedListingIdentity(
+  name: string,
+  packLabel?: string,
+): NormalizedListingIdentity {
+  const attrs = extractProductAttributes(name, packLabel);
+  const t = normalizeForMatch(`${name} ${packLabel ?? ""}`);
+  const unitType: NormalizedListingIdentity["unitType"] = t.includes("bottle")
+    ? "bottle"
+    : t.includes("can")
+      ? "can"
+      : attrs.isMultipack
+        ? "pack"
+        : "unit";
+  const fingerprint = [
+    attrs.brand ?? "unknown-brand",
+    attrs.flavor ?? "plain",
+    attrs.sugarFree == null ? "sugar-unknown" : attrs.sugarFree ? "sugarfree" : "sugared",
+    attrs.volumeMl?.toString() ?? "size-unknown",
+    attrs.isMultipack ? `pack-${attrs.packCount ?? "n"}` : "single",
+    unitType,
+  ].join("|");
+  return {
+    brand: attrs.brand,
+    family: attrs.family,
+    flavor: attrs.flavor,
+    sugarFree: attrs.sugarFree,
+    sizeMl: attrs.volumeMl,
+    packCount: attrs.packCount,
+    isMultipack: attrs.isMultipack,
+    unitType,
+    fingerprint,
+  };
+}
+
 /**
  * Groups product variants into a family (e.g. all "Red Label" listings across retailers).
  */
 export function productLineKey(query: string, productName: string): string {
   const q = normalizeForMatch(query);
   const n = normalizeForMatch(decodeHtmlEntities(productName));
+  const qAttr = extractProductAttributes(query);
+  const nAttr = extractProductAttributes(productName);
+
+  if (qAttr.brand && qAttr.brand === nAttr.brand) {
+    const flavor = nAttr.flavor && nAttr.flavor !== "original" ? nAttr.flavor : "";
+    return [qAttr.brand, flavor].filter(Boolean).join("-").replace(/\s+/g, "-");
+  }
 
   const sortedPhrases = [...PRODUCT_LINE_PHRASES].sort(
     (a, b) => b.length - a.length,
@@ -335,16 +470,14 @@ export function productLineKey(query: string, productName: string): string {
 
 /** Stable key for grouping variants across retailers (edition + flavour + volume + pack) */
 export function variantGroupKey(name: string, packLabel?: string): string {
-  const edition = detectEditionInTitle(name) ?? "classic";
+  const attributes = extractProductAttributes(name, packLabel);
   const pack = extractPackInfo(`${name} ${packLabel ?? ""}`);
-  const vol =
-    volumeMlFromText(normalizeForMatch(name))?.toString() ??
-    name.match(/(\d+)\s*ml/i)?.[1] ??
-    "";
-  const brand = name.toLowerCase().includes("red bull") ? "red bull" : "generic";
-  const flavor = spiritFlavorKey(name);
-  const packKey = pack.isMultipack
-    ? `mp-${pack.unitCount ?? pack.packLabel}`
+  const edition = detectEditionInTitle(name) ?? "classic";
+  const brand = attributes.brand ?? "generic";
+  const flavor = attributes.flavor ?? spiritFlavorKey(name);
+  const vol = attributes.volumeMl?.toString() ?? "";
+  const packKey = attributes.isMultipack
+    ? `mp-${attributes.packCount ?? pack.packLabel}`
     : "single";
   return `${brand}|${edition}|${flavor}|${vol}|${packKey}`;
 }
@@ -355,6 +488,8 @@ export function scoreProductMatch(
   packLabel?: string,
 ): number {
   const intent = parseQueryIntent(query);
+  const queryAttr = extractProductAttributes(query);
+  const titleAttr = extractProductAttributes(title, packLabel);
   const cleanTitle = decodeHtmlEntities(title);
   const t = normalizeForMatch(cleanTitle);
   const combined = normalizeForMatch(`${cleanTitle} ${packLabel ?? ""}`);
@@ -364,6 +499,29 @@ export function scoreProductMatch(
 
   for (const token of intent.tokens) {
     if (token.length >= 2 && t.includes(token)) score += 12;
+  }
+
+  const qTokens = new Set(tokenizeForMatch(intent.raw).filter((x) => x.length >= 2));
+  const tTokens = new Set(tokenizeForMatch(cleanTitle));
+  let overlap = 0;
+  for (const token of qTokens) {
+    if (tTokens.has(token)) overlap += 1;
+  }
+  if (qTokens.size > 0) {
+    score += Math.round((overlap / qTokens.size) * 20);
+  }
+
+  if (queryAttr.brand) {
+    if (titleAttr.brand === queryAttr.brand) score += 30;
+    else if (titleAttr.brand && titleAttr.brand !== queryAttr.brand) score -= 50;
+  }
+
+  if (queryAttr.flavor) {
+    if (titleAttr.flavor === queryAttr.flavor) score += 22;
+    else if (titleAttr.flavor && titleAttr.flavor !== queryAttr.flavor) score -= 42;
+  } else if (titleAttr.flavor && titleAttr.flavor !== "original") {
+    // Strongly avoid auto-merging flavored/sugarfree variants into generic queries.
+    score -= 90;
   }
 
   if (matchIncludes(cleanTitle, intent.raw)) score += intent.tokens.length * 8;
@@ -376,6 +534,14 @@ export function scoreProductMatch(
     } else if (titleVol != null) score -= 12;
     else if (intent.volumeMl === 250 && /\b250\b/.test(t)) score += 10;
   }
+
+  if (queryAttr.volumeMl != null && titleAttr.volumeMl != null) {
+    if (queryAttr.volumeMl === titleAttr.volumeMl) score += 20;
+    else score -= 90;
+  }
+
+  if (intent.wantsMultipack && titleAttr.isMultipack) score += 15;
+  if (intent.wantsSingle && !titleAttr.isMultipack) score += 15;
 
   const titleEdition = detectEditionInTitle(title);
   if (intent.editionTerms.length > 0) {

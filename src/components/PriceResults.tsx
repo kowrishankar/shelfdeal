@@ -1,5 +1,6 @@
 "use client";
 
+import { ProductImage } from "@/components/ProductImage";
 import type { PriceComparisonState, PriceLine, RetailerListing } from "@/lib/types";
 
 const RETAILER_COLORS: Record<string, string> = {
@@ -89,6 +90,11 @@ function RetailerRow({
         >
           {hasError ? "—" : rank}
         </div>
+        <ProductImage
+          src={listing.imageUrl}
+          alt={`${listing.retailerName} ${listing.productName}`}
+          variant="compact"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-[var(--text-primary)]">

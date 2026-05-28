@@ -31,6 +31,14 @@ export const ACTIVE_RETAILERS: RetailerId[] = [
   "booker",
 ];
 
+function extractImageFromHtml(html: string): string | undefined {
+  return (
+    html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+    html.match(/"image":"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i)?.[1] ??
+    undefined
+  );
+}
+
 async function fetchTesco(url: string): Promise<RetailerListing> {
   const normalizedUrl = normalizeTescoProductUrl(url);
   try {
@@ -126,6 +134,7 @@ async function fetchBooker(url: string): Promise<RetailerListing> {
       retailerName: "Booker",
       productName: nameMatch?.[1]?.replace(/\\u0027/g, "'") ?? "Product",
       url,
+      imageUrl: extractImageFromHtml(html),
       inStock: !html.includes('"status":"outOfStock"'),
       prices,
       sortPrice: incVat ?? prices[0].amount,

@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
           imageUrl: v.imageUrl,
           retailerCount: v.retailerCount,
           score: v.score,
+          confidence: v.confidence,
         })),
       })),
       other: result.other.map((v) => ({
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
         imageUrl: v.imageUrl,
         retailerCount: v.retailerCount,
         score: v.score,
+        confidence: v.confidence,
       })),
       retailerHits: result.retailerHits,
     });

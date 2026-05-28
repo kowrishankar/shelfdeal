@@ -1,4 +1,8 @@
 import { getSql } from "../db";
+import {
+  normalizedListingIdentity,
+  scoreProductMatch,
+} from "../product-matching";
 import { RETAILER_NAMES } from "../retailers/shared";
 import { normalizeQuery, productSlug } from "../slug";
 import { normalizeForMatch } from "../text-normalize";
@@ -22,6 +26,8 @@ export interface DbListingRow {
   lastSortPrice: number | null;
   lastPrices: PriceLine[] | null;
   lastFetchedAt: string | null;
+  matchConfidenceLabel: "high" | "medium" | "low" | null;
+  matchConfidenceScore: number | null;
 }
 
 export interface DiscoveredListing {
@@ -29,6 +35,138 @@ export interface DiscoveredListing {
   url: string;
   name: string;
   imageUrl?: string;
+}
+
+function scoreToConfidence(score: number): "high" | "medium" | "low" {
+  if (score >= 70) return "high";
+  if (score >= 45) return "medium";
+  return "low";
+}
+
+async function upsertCanonicalMatch(
+  sql: ReturnType<typeof getSql>,
+  listingId: string,
+  canonicalName: string,
+  listing: DiscoveredListing,
+): Promise<void> {
+  const identity = normalizedListingIdentity(listing.name);
+  if (!identity.brand) return;
+
+  const brandName = identity.brand
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  const brandNorm = normalizeForMatch(brandName);
+  const brandRows = await sql`
+    INSERT INTO brands (name, normalized_name)
+    VALUES (${brandName}, ${brandNorm})
+    ON CONFLICT (normalized_name) DO UPDATE SET
+      updated_at = now()
+    RETURNING id
+  `;
+  const brandId = brandRows[0]?.id as string | undefined;
+  if (!brandId) return;
+
+  const familyName = identity.family ?? `${brandName} Product`;
+  const familyNorm = normalizeForMatch(familyName);
+  const familyRows = await sql`
+    INSERT INTO product_families (brand_id, name, normalized_name)
+    VALUES (${brandId}::uuid, ${familyName}, ${familyNorm})
+    ON CONFLICT (brand_id, normalized_name) DO UPDATE SET
+      updated_at = now()
+    RETURNING id
+  `;
+  const familyId = familyRows[0]?.id as string | undefined;
+  if (!familyId) return;
+
+  const variantName = [
+    brandName,
+    identity.flavor ? identity.flavor : null,
+    identity.sizeMl ? `${identity.sizeMl}ml` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const variantRows = await sql`
+    INSERT INTO product_variants (
+      family_id,
+      name,
+      flavor,
+      sugar_free,
+      size_ml,
+      fingerprint
+    )
+    VALUES (
+      ${familyId}::uuid,
+      ${variantName || familyName},
+      ${identity.flavor ?? null},
+      ${identity.sugarFree},
+      ${identity.sizeMl},
+      ${identity.fingerprint}
+    )
+    ON CONFLICT (fingerprint) DO UPDATE SET
+      updated_at = now()
+    RETURNING id
+  `;
+  const variantId = variantRows[0]?.id as string | undefined;
+  if (!variantId) return;
+
+  const packFingerprint = `${identity.fingerprint}|pack-${identity.packCount ?? 1}|${identity.unitType}`;
+  const packRows = await sql`
+    INSERT INTO pack_variants (
+      product_variant_id,
+      pack_count,
+      is_multipack,
+      unit_type,
+      fingerprint
+    )
+    VALUES (
+      ${variantId}::uuid,
+      ${identity.packCount ?? 1},
+      ${identity.isMultipack},
+      ${identity.unitType},
+      ${packFingerprint}
+    )
+    ON CONFLICT (fingerprint) DO UPDATE SET
+      updated_at = now()
+    RETURNING id
+  `;
+  const packVariantId = packRows[0]?.id as string | undefined;
+  if (!packVariantId) return;
+
+  const score = scoreProductMatch(canonicalName, listing.name);
+  const reasons = [
+    `brand:${identity.brand ?? "unknown"}`,
+    `flavor:${identity.flavor ?? "plain"}`,
+    `size_ml:${identity.sizeMl ?? "unknown"}`,
+    `pack_count:${identity.packCount ?? 1}`,
+    `fingerprint:${identity.fingerprint}`,
+  ];
+
+  await sql`
+    INSERT INTO listing_match_links (
+      listing_id,
+      pack_variant_id,
+      confidence_score,
+      confidence_label,
+      decision,
+      reasons
+    )
+    VALUES (
+      ${listingId}::uuid,
+      ${packVariantId}::uuid,
+      ${score},
+      ${scoreToConfidence(score)},
+      'auto',
+      ${JSON.stringify(reasons)}::jsonb
+    )
+    ON CONFLICT (listing_id) DO UPDATE SET
+      pack_variant_id = EXCLUDED.pack_variant_id,
+      confidence_score = EXCLUDED.confidence_score,
+      confidence_label = EXCLUDED.confidence_label,
+      reasons = EXCLUDED.reasons,
+      updated_at = now()
+  `;
 }
 
 export async function findProductByQuery(
@@ -81,12 +219,25 @@ export async function getListingsForProduct(
   productId: string,
 ): Promise<DbListingRow[]> {
   const sql = getSql();
-  const rows = await sql`
-    SELECT id, retailer_id, url, retailer_product_name, image_url,
-           last_sort_price, last_prices, last_fetched_at
-    FROM retailer_listings
-    WHERE product_id = ${productId}::uuid
-  `;
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await sql`
+      SELECT rl.id, rl.retailer_id, rl.url, rl.retailer_product_name, rl.image_url,
+             rl.last_sort_price, rl.last_prices, rl.last_fetched_at,
+             lml.confidence_label, lml.confidence_score
+      FROM retailer_listings rl
+      LEFT JOIN listing_match_links lml ON lml.listing_id = rl.id
+      WHERE product_id = ${productId}::uuid
+    `;
+  } catch {
+    // Backward-compatible fallback for databases not migrated to canonical tables yet.
+    rows = await sql`
+      SELECT id, retailer_id, url, retailer_product_name, image_url,
+             last_sort_price, last_prices, last_fetched_at
+      FROM retailer_listings
+      WHERE product_id = ${productId}::uuid
+    `;
+  }
   return rows.map((r) => ({
     id: r.id as string,
     retailerId: r.retailer_id as RetailerId,
@@ -96,6 +247,9 @@ export async function getListingsForProduct(
     lastSortPrice: r.last_sort_price != null ? Number(r.last_sort_price) : null,
     lastPrices: r.last_prices as PriceLine[] | null,
     lastFetchedAt: r.last_fetched_at as string | null,
+    matchConfidenceLabel: (r.confidence_label as "high" | "medium" | "low" | null) ?? null,
+    matchConfidenceScore:
+      r.confidence_score != null ? Number(r.confidence_score) : null,
   }));
 }
 
@@ -146,7 +300,7 @@ export async function upsertProductWithListings(
   `;
 
   for (const listing of listings) {
-    await sql`
+    const rows = await sql`
       INSERT INTO retailer_listings (product_id, retailer_id, url, retailer_product_name, image_url)
       VALUES (
         ${productId}::uuid,
@@ -160,7 +314,16 @@ export async function upsertProductWithListings(
         retailer_product_name = EXCLUDED.retailer_product_name,
         image_url = COALESCE(EXCLUDED.image_url, retailer_listings.image_url),
         updated_at = now()
+      RETURNING id
     `;
+    const listingId = rows[0]?.id as string | undefined;
+    if (listingId) {
+      try {
+        await upsertCanonicalMatch(sql, listingId, canonicalName, listing);
+      } catch {
+        // Ignore canonical-link persistence until schema migration is applied.
+      }
+    }
   }
 
   const product = await getProductById(productId);
@@ -247,5 +410,7 @@ export function listingRowToRetailerListing(
     prices: row.lastPrices,
     sortPrice: row.lastSortPrice,
     fetchedAt: row.lastFetchedAt ?? new Date().toISOString(),
+    matchConfidenceLabel: row.matchConfidenceLabel ?? undefined,
+    matchConfidenceScore: row.matchConfidenceScore ?? undefined,
   };
 }

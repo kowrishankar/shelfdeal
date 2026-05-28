@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
-import { suggestProductsFromDb, type DbProductSuggestion } from "@/lib/db/product-search";
+import {
+  getCanonicalGroupsFromDb,
+  suggestProductsFromDb,
+  type DbProductSuggestion,
+} from "@/lib/db/product-search";
 import {
   buildVariantSearchQuery,
   extractPackInfo,
@@ -12,7 +16,7 @@ import {
   type ProductVariantOption,
 } from "@/lib/variants";
 import { discoverAcrossRetailers } from "@/lib/retailers/search";
-import { decodeHtmlEntities } from "@/lib/text-normalize";
+import { decodeHtmlEntities, normalizeForMatch } from "@/lib/text-normalize";
 import type { RetailerSearchHit } from "@/lib/retailers/search/types";
 
 export interface ProductFamilyGroup {
@@ -66,6 +70,7 @@ function hitToVariantOption(
     imageUrl: hit.imageUrl,
     retailerCount: 1,
     score,
+    confidence: score >= 65 ? "high" : score >= 40 ? "medium" : "low",
     listings: [hit],
   };
 }
@@ -204,6 +209,9 @@ export async function discoverGroupedSearch(
   const dbProducts = process.env.DATABASE_URL
     ? await suggestProductsFromDb(trimmed).catch(() => [])
     : [];
+  const canonicalGroups = process.env.DATABASE_URL
+    ? await getCanonicalGroupsFromDb(trimmed).catch(() => [])
+    : [];
 
   const hits = await discoverAcrossRetailers(trimmed);
   const retailerHits: Partial<Record<string, number>> = {};
@@ -220,6 +228,38 @@ export async function discoverGroupedSearch(
     variants,
   );
 
+  const mergedGroupsByKey = new Map<string, ProductFamilyGroup>();
+  for (const g of [...canonicalGroups, ...groups]) {
+    const key = normalizeForMatch(g.label);
+    const existing = mergedGroupsByKey.get(key);
+    if (!existing) {
+      mergedGroupsByKey.set(key, g);
+      continue;
+    }
+    const byVariant = new Map<string, ProductVariantOption>();
+    for (const v of [...existing.variants, ...g.variants]) {
+      const vKey = normalizeForMatch(`${v.label}|${v.packLabel}`);
+      const prev = byVariant.get(vKey);
+      if (!prev || v.score > prev.score) byVariant.set(vKey, v);
+    }
+    const mergedVariants = [...byVariant.values()].sort((a, b) => b.score - a.score);
+    const retailerCount = new Set(
+      mergedVariants.flatMap((v) => v.listings.map((l) => l.retailerId)),
+    ).size;
+    mergedGroupsByKey.set(key, {
+      id: existing.id,
+      label: existing.label.length >= g.label.length ? existing.label : g.label,
+      imageUrl: existing.imageUrl ?? g.imageUrl,
+      retailerCount: Math.max(existing.retailerCount, g.retailerCount, retailerCount),
+      variants: mergedVariants,
+    });
+  }
+  const mergedGroups = [...mergedGroupsByKey.values()].sort((a, b) => {
+    const scoreA = Math.max(...a.variants.map((v) => v.score));
+    const scoreB = Math.max(...b.variants.map((v) => v.score));
+    return scoreB - scoreA;
+  });
+
   const orphanHits = otherHitsFromScored(trimmed, hits, usedUrls);
 
   const otherById = new Map<string, ProductVariantOption>();
@@ -231,7 +271,7 @@ export async function discoverGroupedSearch(
   return {
     query: trimmed,
     dbProducts,
-    groups,
+    groups: mergedGroups,
     other,
     retailerHits,
   };

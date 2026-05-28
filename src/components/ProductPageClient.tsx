@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { usePriceComparison } from "@/hooks/usePriceComparison";
 import { ProductInsightsPanel } from "@/components/intelligence/ProductInsightsPanel";
 import { PriceResults } from "@/components/PriceResults";
+import { ProductPackOptionsPanel } from "@/components/ProductPackOptionsPanel";
 import { ShelfPricingPanel } from "@/components/ShelfPricingPanel";
 import { TrackPriceButton } from "@/components/TrackPriceButton";
 import { VariantSearchBar } from "@/components/VariantSearchBar";
@@ -168,6 +169,12 @@ export function ProductPageClient({
             listings={result?.listings ?? []}
             productKey={resolvedId ?? searchQuery}
           />
+        </div>
+      )}
+
+      {result?.isComplete && (result?.listings?.length ?? 0) > 0 && (
+        <div className="mt-6">
+          <ProductPackOptionsPanel listings={result?.listings ?? []} />
         </div>
       )}
 

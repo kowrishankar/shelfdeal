@@ -42,11 +42,19 @@ function isFresh(fetchedAt: string | null): boolean {
 function enrichListing(
   listing: RetailerListing,
   productName: string,
+  fallbackImageUrl?: string | null,
+  fallbackConfidenceLabel?: "high" | "medium" | "low" | null,
+  fallbackConfidenceScore?: number | null,
 ): RetailerListing {
   return {
     ...listing,
     retailerName: RETAILER_NAMES[listing.retailerId],
     productName: listing.productName || productName,
+    imageUrl: listing.imageUrl ?? fallbackImageUrl ?? undefined,
+    matchConfidenceLabel:
+      listing.matchConfidenceLabel ?? fallbackConfidenceLabel ?? undefined,
+    matchConfidenceScore:
+      listing.matchConfidenceScore ?? fallbackConfidenceScore ?? undefined,
   };
 }
 
@@ -224,6 +232,9 @@ export async function* streamPriceComparison(
           const listing = enrichListing(
             live,
             row.retailerProductName ?? product!.canonicalName,
+            row.imageUrl,
+            row.matchConfidenceLabel,
+            row.matchConfidenceScore,
           );
           if (listing.prices.length) {
             await saveListingPrice(row.id, listing);
@@ -247,6 +258,9 @@ export async function* streamPriceComparison(
                 error: "Price fetch failed",
               },
               product!.canonicalName,
+              row.imageUrl,
+              row.matchConfidenceLabel,
+              row.matchConfidenceScore,
             );
           pricedByRetailer.set(listing.retailerId, listing);
           queue.push({ type: "listing", listing });

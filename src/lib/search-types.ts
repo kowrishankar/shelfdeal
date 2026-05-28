@@ -13,6 +13,7 @@ export interface DiscoverVariantSummary {
   imageUrl?: string;
   retailerCount: number;
   score: number;
+  confidence?: "high" | "medium" | "low";
 }
 
 export interface ProductFamilySummary {
