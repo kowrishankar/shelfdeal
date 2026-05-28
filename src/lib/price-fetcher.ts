@@ -30,7 +30,14 @@ export const ACTIVE_RETAILERS: RetailerId[] = [
 
 async function fetchTesco(url: string): Promise<RetailerListing> {
   const normalizedUrl = normalizeTescoProductUrl(url);
-  return fetchJsonLdListing("tesco", normalizedUrl, (html, base) => {
+  const fetchedAt = new Date().toISOString();
+  try {
+    const html = await fetchHtml(normalizedUrl, {
+      warmUrl: "https://www.tesco.com/groceries/en-GB/",
+      referer: "https://www.tesco.com/groceries/en-GB/",
+      scraperProxy: Boolean(process.env.SCRAPER_API_KEY),
+    });
+    const base = listingFromJsonLd("tesco", normalizedUrl, html);
     const club = parseTescoClubcardMeta(html);
     const prices = [];
 
@@ -51,10 +58,27 @@ async function fetchTesco(url: string): Promise<RetailerListing> {
       });
     }
 
-    if (prices.length === 0) return base;
+    if (prices.length === 0) {
+      if (base) return base;
+      return unavailable(
+        "tesco",
+        normalizedUrl,
+        fetchedAt,
+        "Could not parse Tesco product price",
+      );
+    }
 
     const sortPrice = Math.min(...prices.map((p) => p.amount));
     const product = base ?? listingFromJsonLd("tesco", normalizedUrl, html);
+
+    if (!product) {
+      return unavailable(
+        "tesco",
+        normalizedUrl,
+        fetchedAt,
+        "Could not parse Tesco product details",
+      );
+    }
 
     return {
       retailerId: "tesco",
@@ -65,10 +89,13 @@ async function fetchTesco(url: string): Promise<RetailerListing> {
       inStock: product?.inStock ?? true,
       prices,
       sortPrice,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt,
       note: club.until ? `Clubcard offer until ${club.until}` : undefined,
     };
-  });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Fetch failed";
+    return unavailable("tesco", normalizedUrl, fetchedAt, message);
+  }
 }
 
 async function fetchBooker(url: string): Promise<RetailerListing> {
