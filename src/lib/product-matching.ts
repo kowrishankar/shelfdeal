@@ -175,6 +175,66 @@ export function extractPackInfo(text: string): {
     };
   }
 
+  const packOf = t.match(/\bpack\s+of\s+(\d+)\b/i);
+  if (packOf) {
+    const n = Number(packOf[1]);
+    if (n > 1) {
+      return {
+        packLabel: `Pack of ${n}`,
+        isMultipack: true,
+        unitCount: n,
+      };
+    }
+  }
+
+  const multipackOf = t.match(/\bmultipack\s+of\s+(\d+)\b/i);
+  if (multipackOf) {
+    const n = Number(multipackOf[1]);
+    if (n > 1) {
+      return {
+        packLabel: `Multipack of ${n}`,
+        isMultipack: true,
+        unitCount: n,
+      };
+    }
+  }
+
+  const countMatch = t.match(/\b(\d+)\s*count\b/i);
+  if (countMatch) {
+    const n = Number(countMatch[1]);
+    if (n > 1) {
+      return {
+        packLabel: `${n} count`,
+        isMultipack: true,
+        unitCount: n,
+      };
+    }
+  }
+
+  const cansMatch = t.match(/\b(\d+)\s*cans?\b/i);
+  if (cansMatch) {
+    const n = Number(cansMatch[1]);
+    if (n > 1) {
+      return {
+        packLabel: `${n} cans`,
+        isMultipack: true,
+        unitCount: n,
+      };
+    }
+  }
+
+  const bottlesMatch = t.match(/\b(\d+)\s*bottles?\b/i);
+  if (bottlesMatch) {
+    const n = Number(bottlesMatch[1]);
+    if (n > 1) {
+      return {
+        packLabel: `${n} bottles`,
+        isMultipack: true,
+        unitCount: n,
+      };
+    }
+  }
+
   const packMatch = t.match(/(\d+)\s*pack\b/i);
   if (packMatch) {
     const n = Number(packMatch[1]);
@@ -299,6 +359,9 @@ const BRAND_ALIASES: Record<string, string[]> = {
   pepsi: ["pepsi"],
   "monster energy": ["monster", "monster energy"],
   lucozade: ["lucozade"],
+  "jack daniels": ["jack daniel", "jack daniels", "jack daniel's"],
+  jameson: ["jameson"],
+  smirnoff: ["smirnoff"],
 };
 
 const FLAVOR_ALIASES: Record<string, string[]> = {
@@ -416,8 +479,7 @@ export function productLineKey(query: string, productName: string): string {
   const nAttr = extractProductAttributes(productName);
 
   if (qAttr.brand && qAttr.brand === nAttr.brand) {
-    const flavor = nAttr.flavor && nAttr.flavor !== "original" ? nAttr.flavor : "";
-    return [qAttr.brand, flavor].filter(Boolean).join("-").replace(/\s+/g, "-");
+    return qAttr.brand.replace(/\s+/g, "-");
   }
 
   const sortedPhrases = [...PRODUCT_LINE_PHRASES].sort(
@@ -704,6 +766,37 @@ export function buildRetailerSearchQueries(
     }
   }
   return [...unique];
+}
+
+/** Queries when the user picks a product by its displayed title — full title first, then fallbacks */
+export function buildSelectionSearchQueries(selectedTitle: string): string[] {
+  const trimmed = selectedTitle.trim();
+  const clean = cleanProductTitleForSearch(trimmed);
+  const fallbacks = buildRetailerSearchQueries(trimmed);
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (q: string) => {
+    const t = q.trim();
+    if (t.length < 3) return;
+    const key = t.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ordered.push(t);
+    const stripped = stripDiacritics(t).trim();
+    if (stripped.length >= 3) {
+      const sk = stripped.toLowerCase();
+      if (!seen.has(sk)) {
+        seen.add(sk);
+        ordered.push(stripped);
+      }
+    }
+  };
+
+  push(trimmed);
+  if (clean.toLowerCase() !== trimmed.toLowerCase()) push(clean);
+  for (const q of fallbacks) push(q);
+  return ordered;
 }
 
 function wordsOnlyQuery(text: string, maxWords: number): string {

@@ -1,4 +1,5 @@
 import { fetchHtml } from "../http";
+import { applyMultipackUnitPricing } from "../pack-pricing";
 import type { RetailerListing } from "../types";
 import {
   fetchAmazonPriceViaCreators,
@@ -97,18 +98,21 @@ async function fetchAmazonFromHtml(url: string): Promise<RetailerListing | null>
         ]
       : [];
 
-  return {
-    retailerId: "amazon",
-    retailerName: "Amazon",
-    productName,
-    url,
-    imageUrl: base?.imageUrl,
-    inStock: base?.inStock ?? true,
-    prices,
-    sortPrice: Math.min(...prices.map((p) => p.amount)),
-    fetchedAt,
-    note: "Amazon price may vary by seller",
-  };
+  return applyMultipackUnitPricing(
+    {
+      retailerId: "amazon",
+      retailerName: "Amazon",
+      productName,
+      url,
+      imageUrl: base?.imageUrl,
+      inStock: base?.inStock ?? true,
+      prices,
+      sortPrice: Math.min(...prices.map((p) => p.amount)),
+      fetchedAt,
+      note: "Amazon price may vary by seller",
+    },
+    html,
+  );
 }
 
 export async function fetchAmazonPrice(url: string): Promise<RetailerListing> {

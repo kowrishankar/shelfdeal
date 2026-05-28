@@ -7,6 +7,10 @@ export interface VariantSelectionPayload {
   /** Shown on product page before live fetch completes */
   displayName?: string;
   imageUrl?: string;
+  /** Flavour picked on discovery (e.g. honey, original) */
+  flavorKey?: string;
+  flavorLabel?: string;
+  brandLabel?: string;
 }
 
 export function encodeVariantSelection(payload: VariantSelectionPayload): string {

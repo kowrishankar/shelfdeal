@@ -14,6 +14,7 @@ import {
   type DbListingRow,
   type DbProduct,
 } from "./db/products";
+import { finalizeAllListingPricing } from "./pack-pricing";
 import { fetchRetailerPrice } from "./price-fetcher";
 import { isAsdaGroceriesProductUrl } from "./retailers/asda-algolia";
 import { RETAILER_NAMES } from "./retailers/shared";
@@ -64,7 +65,19 @@ function rowToListing(
 ): RetailerListing | null {
   const cached = listingRowToRetailerListing(row, productName);
   if (!cached) return null;
-  return enrichListing(cached, productName);
+  const [priced] = finalizeAllListingPricing([cached]);
+  return enrichListing(priced, productName);
+}
+
+function syncPricedListings(
+  pricedByRetailer: Map<RetailerId, RetailerListing>,
+  queue: ReturnType<typeof createEventQueue>,
+) {
+  const finalized = finalizeAllListingPricing([...pricedByRetailer.values()]);
+  for (const listing of finalized) {
+    pricedByRetailer.set(listing.retailerId, listing);
+    queue.push({ type: "listing", listing });
+  }
 }
 
 function sortCheapest(listings: RetailerListing[]): RetailerListing | undefined {
@@ -136,9 +149,14 @@ export async function* streamPriceComparison(
         const listing = rowToListing(row, product.canonicalName);
         if (listing) {
           pricedByRetailer.set(listing.retailerId, listing);
-          yield { type: "listing", listing, fromCache: true };
         }
       }
+    }
+    for (const listing of finalizeAllListingPricing([
+      ...pricedByRetailer.values(),
+    ])) {
+      pricedByRetailer.set(listing.retailerId, listing);
+      yield { type: "listing", listing, fromCache: true };
     }
   }
 
@@ -240,7 +258,7 @@ export async function* streamPriceComparison(
             await saveListingPrice(row.id, listing);
           }
           pricedByRetailer.set(listing.retailerId, listing);
-          queue.push({ type: "listing", listing });
+          syncPricedListings(pricedByRetailer, queue);
         } catch {
           const cached = rowToListing(row, product!.canonicalName);
           const listing =
@@ -263,7 +281,7 @@ export async function* streamPriceComparison(
               row.matchConfidenceScore,
             );
           pricedByRetailer.set(listing.retailerId, listing);
-          queue.push({ type: "listing", listing });
+          syncPricedListings(pricedByRetailer, queue);
         } finally {
           finishedCount += 1;
           if (finishedCount === toFetch.length) {

@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
   if (q.length < 2) {
     return NextResponse.json({
       query: q,
-      dbProducts: [],
       groups: [],
       other: [],
     });
@@ -19,12 +18,6 @@ export async function GET(request: NextRequest) {
     const result = await discoverGroupedSearch(q);
     return NextResponse.json({
       query: result.query,
-      dbProducts: result.dbProducts.map((p) => ({
-        id: p.id,
-        name: p.name,
-        imageUrl: p.imageUrl,
-        barcode: p.barcode,
-      })),
       groups: result.groups.map((g) => ({
         id: g.id,
         label: g.label,

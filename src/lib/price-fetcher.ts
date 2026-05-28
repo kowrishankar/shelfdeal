@@ -1,6 +1,7 @@
 import type { RetailerId, RetailerListing } from "./types";
 import {
   applyMultipackUnitPricing,
+  finalizeListingPricing,
   reorderWholesalePrices,
 } from "./pack-pricing";
 import {
@@ -15,6 +16,10 @@ import {
   isAsdaGroceriesProductUrl,
 } from "./retailers/asda-algolia";
 import { fetchAmazonPrice, isAmazonProductUrl } from "./retailers/amazon";
+import {
+  fetchMorrisonsPrice,
+  isMorrisonsProductUrl,
+} from "./retailers/morrisons";
 import {
   fetchTescoProductViaXapi,
   normalizeTescoProductUrl,
@@ -167,6 +172,9 @@ export async function fetchRetailerPrice(
   if (isAmazonProductUrl(url)) {
     return fetchAmazonPrice(url);
   }
+  if (isMorrisonsProductUrl(url)) {
+    return fetchMorrisonsPrice(url);
+  }
 
   const id = normalizeRetailerId(retailerId);
   let listing: RetailerListing;
@@ -183,12 +191,15 @@ export async function fetchRetailerPrice(
     case "asda":
       listing = await fetchAsdaPrice(url);
       break;
+    case "morrisons":
+      listing = await fetchMorrisonsPrice(url);
+      break;
     default:
       listing = await fetchJsonLdListing(id, url);
   }
 
-  if (listing.prices.length > 0 && id !== "booker") {
-    return applyMultipackUnitPricing(listing);
+  if (listing.prices.length > 0) {
+    return finalizeListingPricing(listing);
   }
   return listing;
 }

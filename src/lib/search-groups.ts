@@ -1,9 +1,5 @@
 import { createHash } from "crypto";
-import {
-  getCanonicalGroupsFromDb,
-  suggestProductsFromDb,
-  type DbProductSuggestion,
-} from "@/lib/db/product-search";
+import { getCanonicalGroupsFromDb } from "@/lib/db/product-search";
 import {
   buildVariantSearchQuery,
   extractPackInfo,
@@ -30,7 +26,6 @@ export interface ProductFamilyGroup {
 
 export interface GroupedSearchResult {
   query: string;
-  dbProducts: DbProductSuggestion[];
   groups: ProductFamilyGroup[];
   other: ProductVariantOption[];
   /** Raw hit counts per retailer from the latest discover scrape */
@@ -206,9 +201,6 @@ export async function discoverGroupedSearch(
   query: string,
 ): Promise<GroupedSearchResult> {
   const trimmed = query.trim();
-  const dbProducts = process.env.DATABASE_URL
-    ? await suggestProductsFromDb(trimmed).catch(() => [])
-    : [];
   const canonicalGroups = process.env.DATABASE_URL
     ? await getCanonicalGroupsFromDb(trimmed).catch(() => [])
     : [];
@@ -270,7 +262,6 @@ export async function discoverGroupedSearch(
 
   return {
     query: trimmed,
-    dbProducts,
     groups: mergedGroups,
     other,
     retailerHits,

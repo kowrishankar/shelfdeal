@@ -1,3 +1,4 @@
+import { listingUnitPrice } from "./pack-pricing";
 import { RETAILER_NAMES } from "./retailers/shared";
 import type { PriceLine, RetailerId, RetailerListing } from "./types";
 
@@ -39,23 +40,16 @@ function unitCostFromPrices(
   return null;
 }
 
-function shelfRetailPrice(prices: PriceLine[], useMembership: boolean): number | null {
+function shelfRetailPrice(
+  listing: RetailerListing,
+  useMembership: boolean,
+): number | null {
   if (useMembership) {
-    const club = prices.find((p) => p.kind === "clubcard");
+    const club = listing.prices.find((p) => p.kind === "clubcard");
     if (club) return club.amount;
-    const promo = prices.find((p) => p.kind === "promo");
-    if (promo) return promo.amount;
   }
 
-  const unit =
-    prices.find((p) => p.kind === "unit_inc_vat") ??
-    prices.find((p) => p.kind === "unit_ex_vat");
-  if (unit) return unit.amount;
-
-  const shelf =
-    prices.find((p) => p.kind === "standard") ??
-    prices.find((p) => p.kind === "inc_vat");
-  return shelf ? shelf.amount : null;
+  return listingUnitPrice(listing);
 }
 
 export function detectMembershipOffers(
@@ -91,7 +85,11 @@ export function extractWholesaleUnitCost(listings: RetailerListing[]): {
   let bookerPorAtRrp: number | null = null;
 
   for (const listing of listings) {
-    const wholesale = unitCostFromPrices(listing.prices, listing.retailerId);
+    const wholesale =
+      unitCostFromPrices(listing.prices, listing.retailerId) ??
+      (listing.retailerId === "booker"
+        ? listingUnitPrice(listing)
+        : null);
     if (wholesale != null && (unitCost == null || wholesale < unitCost)) {
       unitCost = wholesale;
       unitCostRetailer = RETAILER_NAMES[listing.retailerId];
@@ -117,7 +115,7 @@ export function pickReferenceRetail(
 
   for (const listing of listings) {
     if (listing.retailerId === "booker") continue;
-    const price = shelfRetailPrice(listing.prices, useMembership);
+    const price = shelfRetailPrice(listing, useMembership);
     if (price == null) continue;
     if (best == null || price < best) {
       best = price;

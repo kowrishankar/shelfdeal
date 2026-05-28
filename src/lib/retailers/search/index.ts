@@ -1,6 +1,6 @@
 import type { RetailerId } from "../../types";
 import {
-  buildRetailerSearchQueries,
+  buildSelectionSearchQueries,
   pickBestMatch,
   scoreProductMatch,
 } from "../../product-matching";
@@ -115,7 +115,7 @@ export async function discoverAndResolveForSelection(selectedName: string): Prom
   const bestPerRetailer = new Map<RetailerId, RetailerSearchHit>();
   const discoveryCounts: Partial<Record<RetailerId, number>> = {};
 
-  const retailerQueries = buildRetailerSearchQueries(selected);
+  const retailerQueries = buildSelectionSearchQueries(selected);
 
   await Promise.all(
     DISCOVERY_RETAILERS.map(async (retailerId) => {

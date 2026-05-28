@@ -37,6 +37,9 @@ function priceLineStyle(line: PriceLine, highlight?: boolean): string {
 function PriceBadge({ line, highlight }: { line: PriceLine; highlight?: boolean }) {
   const isClubcard = line.kind === "clubcard";
   const isPor = line.kind === "por";
+  const showPercent =
+    line.percent != null &&
+    (isPor || line.label.toLowerCase().includes("margin"));
 
   return (
     <div
@@ -52,7 +55,9 @@ function PriceBadge({ line, highlight }: { line: PriceLine; highlight?: boolean 
         <span className="truncate">{line.label}</span>
       </span>
       <span className="shrink-0 tabular-nums font-semibold">
-        {isPor && line.percent != null ? `${line.percent}%` : formatPrice(line.amount)}
+        {showPercent
+          ? `${line.percent}%`
+          : formatPrice(line.amount)}
       </span>
     </div>
   );
@@ -69,13 +74,12 @@ function RetailerRow({
 }) {
   const gradient = RETAILER_COLORS[listing.retailerId] ?? "from-slate-600/80 to-slate-800/80";
   const hasError = Boolean(listing.error);
-  const highlightPrice = listing.prices.find(
-    (p) =>
-      p.kind === "unit_inc_vat" ||
-      p.kind === "clubcard" ||
-      p.kind === "inc_vat" ||
-      p.kind === "standard",
-  );
+  const highlightPrice =
+    listing.prices.find((p) => p.kind === "unit_inc_vat") ??
+    listing.prices.find((p) => p.kind === "unit_ex_vat") ??
+    listing.prices.find((p) => p.kind === "clubcard") ??
+    listing.prices.find((p) => p.kind === "inc_vat") ??
+    listing.prices.find((p) => p.kind === "standard");
 
   return (
     <article

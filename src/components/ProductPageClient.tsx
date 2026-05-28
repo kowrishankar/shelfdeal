@@ -97,7 +97,13 @@ export function ProductPageClient({
     router.push(`/search?q=${encodeURIComponent(name)}`);
   };
 
-  const displayName = result?.product?.name ?? previewName ?? searchQuery;
+  const displayName =
+    previewName ??
+    (selection?.brandLabel && selection?.flavorLabel
+      ? `${selection.brandLabel} — ${selection.flavorLabel}`
+      : null) ??
+    result?.product?.name ??
+    searchQuery;
   const productImage =
     result?.product?.imageUrl ??
     result?.listings.find((l) => l.imageUrl)?.imageUrl ??
@@ -174,7 +180,11 @@ export function ProductPageClient({
 
       {result?.isComplete && (result?.listings?.length ?? 0) > 0 && (
         <div className="mt-6">
-          <ProductPackOptionsPanel listings={result?.listings ?? []} />
+          <ProductPackOptionsPanel
+            listings={result?.listings ?? []}
+            initialFlavorKey={selection?.flavorKey}
+            brandLabel={selection?.brandLabel}
+          />
         </div>
       )}
 

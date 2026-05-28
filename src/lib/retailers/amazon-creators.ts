@@ -1,3 +1,4 @@
+import { applyMultipackUnitPricing } from "../pack-pricing";
 import type { RetailerListing } from "../types";
 import { unavailable } from "./shared";
 
@@ -163,7 +164,7 @@ function listingFromCreatorsItem(
     buyBox as { availability?: { type?: string } } | undefined
   )?.availability?.type;
 
-  return {
+  return applyMultipackUnitPricing({
     retailerId: "amazon",
     retailerName: "Amazon",
     productName: name ?? "Product",
@@ -181,7 +182,7 @@ function listingFromCreatorsItem(
     sortPrice: amount,
     fetchedAt,
     note: "Price via Amazon Creators API — may vary by seller",
-  };
+  });
 }
 
 export async function fetchAmazonPriceViaCreators(
