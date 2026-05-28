@@ -15,7 +15,10 @@ import {
   isAsdaGroceriesProductUrl,
 } from "./retailers/asda-algolia";
 import { fetchAmazonPrice, isAmazonProductUrl } from "./retailers/amazon";
-import { normalizeTescoProductUrl } from "./retailers/tesco-xapi";
+import {
+  fetchTescoProductViaXapi,
+  normalizeTescoProductUrl,
+} from "./retailers/tesco-xapi";
 import { fetchHtml } from "./http";
 
 export const ACTIVE_RETAILERS: RetailerId[] = [
@@ -30,6 +33,13 @@ export const ACTIVE_RETAILERS: RetailerId[] = [
 
 async function fetchTesco(url: string): Promise<RetailerListing> {
   const normalizedUrl = normalizeTescoProductUrl(url);
+  try {
+    const fromXapi = await fetchTescoProductViaXapi(normalizedUrl);
+    if (fromXapi) return fromXapi;
+  } catch {
+    // Fallback to HTML parse for resilience.
+  }
+
   const fetchedAt = new Date().toISOString();
   try {
     const html = await fetchHtml(normalizedUrl, {
